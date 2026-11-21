@@ -1304,17 +1304,24 @@ func TopUp(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	quota, err := model.Redeem(req.Key, id)
+	result, err := model.RedeemCode(req.Key, id)
 	if err != nil {
-		// 不向用户暴露兑换失败的细分原因，避免攻击者根据错误类型判断兑换码状态。
-		common.ApiErrorT(c, "Redemption failed, please try again later")
 		logger.LogError(c, common.LogText("failed to redeem key %s for user %d: %s", req.Key, id, err.Error()))
+		// 订阅码的方案级拒绝（售罄、超出限购）可以告知用户；其余不暴露细分原因，避免攻击者判断兑换码状态。
+		var message *common.Message
+		if errors.As(err, &message) {
+			common.ApiError(c, message)
+			return
+		}
+		common.ApiErrorT(c, "Redemption failed, please try again later")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    quota,
+		"success":    true,
+		"message":    "",
+		"data":       result.Quota,
+		"plan_id":    result.PlanId,
+		"plan_title": result.PlanTitle,
 	})
 }
 

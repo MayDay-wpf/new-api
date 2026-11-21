@@ -38,6 +38,10 @@ import { REDEMPTION_STATUS, REDEMPTION_STATUSES } from '../constants'
 import { isRedemptionExpired } from '../lib'
 import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import {
+  getPlanLabel,
+  useSubscriptionPlanTitles,
+} from './use-subscription-plan-titles'
 
 const MOBILE_SKELETON_KEYS = [
   'redemption-mobile-skeleton-1',
@@ -77,6 +81,7 @@ interface RedemptionsMobileListProps {
 
 export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
   const { t } = useTranslation()
+  const planTitles = useSubscriptionPlanTitles()
   const rows = props.table.getRowModel().rows
 
   if (props.isLoading) return <RedemptionsMobileSkeleton />
@@ -162,9 +167,15 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
             </div>
 
             <div className='flex items-center justify-between gap-2 text-xs'>
-              <span className='text-muted-foreground'>{t('Quota')}</span>
-              <span className='font-medium tabular-nums'>
-                {formatQuota(redemption.quota)}
+              <span className='text-muted-foreground'>
+                {(redemption.plan_id ?? 0) > 0
+                  ? t('Subscription plan')
+                  : t('Quota')}
+              </span>
+              <span className='truncate font-medium tabular-nums'>
+                {(redemption.plan_id ?? 0) > 0
+                  ? getPlanLabel(planTitles, redemption.plan_id ?? 0)
+                  : formatQuota(redemption.quota)}
               </span>
             </div>
           </div>

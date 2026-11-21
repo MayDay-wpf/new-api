@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -120,6 +121,9 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
 	if ok {
 		actualGroupRatio = userGroupRatio
+	}
+	if discount, _, matched := operation_setting.ResolveBillingDiscount(relayInfo.UserId, ctx.Request.UserAgent()); matched {
+		actualGroupRatio *= discount
 	}
 
 	quotaInfo := QuotaInfo{

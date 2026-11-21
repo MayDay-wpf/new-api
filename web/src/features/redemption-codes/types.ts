@@ -33,9 +33,12 @@ export const redemptionSchema = z.object({
   redeemed_time: z.number(),
   expired_time: z.number(), // 0 for never expires
   used_user_id: z.number(),
+  plan_id: z.number().optional(), // > 0: subscription code granting this plan
 })
 
 export type Redemption = z.infer<typeof redemptionSchema>
+
+export type RedemptionType = 'quota' | 'subscription'
 
 // ============================================================================
 // API Request/Response Types
@@ -74,6 +77,7 @@ export interface RedemptionFormData {
   id?: number
   name: string
   quota: number
+  plan_id: number // 0 for balance codes
   expired_time: number
   count?: number // Only for create
   status?: number // Only for status update

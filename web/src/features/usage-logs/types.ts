@@ -209,6 +209,8 @@ export interface LogOtherData {
     local_count_tokens?: boolean
     usage_billing_path?: UsageBillingPath | string
     channel_affinity?: ChannelAffinityInfo
+    // Matched billing discount rule name (admin only)
+    discount_rule?: string
     // Top-up audit fields (type=1, admin only)
     payment_method?: string
     callback_payment_method?: string
@@ -262,7 +264,10 @@ export interface LogOtherData {
   }
   // Login audit fields (type=7); visible to the log owner
   login_method?: string
+  // Client User-Agent; login logs and consume/error logs (request source)
   user_agent?: string
+  // Admin billing discount already folded into group_ratio
+  discount_ratio?: number
   request_path?: string
   request_conversion?: string[]
   ws?: boolean

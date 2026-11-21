@@ -184,6 +184,12 @@ type SubscriptionPlan struct {
 	// Max purchases per user (0 = unlimited)
 	MaxPurchasePerUser int `json:"max_purchase_per_user" gorm:"type:int;default:0"`
 
+	// Total stock across all users (0 = unlimited). Every issued user subscription of this plan
+	// (paid orders, balance purchases and admin grants) consumes one unit.
+	StockTotal int `json:"stock_total" gorm:"type:int;not null;default:0"`
+	// Units currently occupied: active, unexpired user_subscriptions of this plan (computed, not persisted)
+	StockSold int `json:"stock_sold" gorm:"-"`
+
 	// Upgrade user group after purchase (empty = no change)
 	UpgradeGroup string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
 
@@ -210,6 +216,147 @@ func (p *SubscriptionPlan) BeforeCreate(tx *gorm.DB) error {
 
 func (p *SubscriptionPlan) BeforeUpdate(tx *gorm.DB) error {
 	p.UpdatedAt = common.GetTimestamp()
+	return nil
+}
+
+// IsSoldOut reports whether the plan has a stock limit and it has been used up.
+// StockSold must have been filled by FillSubscriptionPlanStockSold.
+func (p *SubscriptionPlan) IsSoldOut() bool {
+	return p != nil && p.StockTotal > 0 && p.StockSold >= p.StockTotal
+}
+
+var ErrSubscriptionPlanSoldOut = common.NewMessage("This plan is sold out")
+
+// countSubscriptionPlanIssued counts the plan's subscriptions that still occupy stock
+// (active and not yet ended; expired / cancelled ones release their unit),
+// plus outstanding subscription redemption codes that still reserve stock.
+func countSubscriptionPlanIssued(db *gorm.DB, planId int) (int64, error) {
+	return countSubscriptionPlanIssuedExcluding(db, planId, 0)
+}
+
+func countSubscriptionPlanIssuedExcluding(db *gorm.DB, planId int, excludeRedemptionId int) (int64, error) {
+	var count int64
+	if err := db.Model(&UserSubscription{}).
+		Where("plan_id = ? AND status = ? AND end_time > ?", planId, "active", common.GetTimestamp()).
+		Count(&count).Error; err != nil {
+		return 0, err
+	}
+	reserved, err := countSubscriptionPlanReservedRedemptions(db, planId, excludeRedemptionId)
+	if err != nil {
+		return 0, err
+	}
+	return count + reserved, nil
+}
+
+// redemptionReservesStockQuery filters subscription codes that still hold a stock slot:
+// not yet redeemed (enabled or disabled) and not expired. Soft-deleted codes are excluded by gorm.
+func redemptionReservesStockQuery(db *gorm.DB) *gorm.DB {
+	return db.Model(&Redemption{}).Where("plan_id > 0 AND status <> ? AND (expired_time = 0 OR expired_time >= ?)",
+		common.RedemptionCodeStatusUsed, common.GetTimestamp())
+}
+
+// redemptionReservesStock mirrors redemptionReservesStockQuery for a single code.
+func redemptionReservesStock(r *Redemption) bool {
+	if r == nil || r.PlanId <= 0 || r.Status == common.RedemptionCodeStatusUsed {
+		return false
+	}
+	return r.ExpiredTime == 0 || r.ExpiredTime >= common.GetTimestamp()
+}
+
+func countSubscriptionPlanReservedRedemptions(db *gorm.DB, planId int, excludeRedemptionId int) (int64, error) {
+	var count int64
+	query := redemptionReservesStockQuery(db).Where("plan_id = ?", planId)
+	if excludeRedemptionId > 0 {
+		query = query.Where("id <> ?", excludeRedemptionId)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// checkSubscriptionPlanStock compares stock_total (read from the database, bypassing the
+// plan cache) with the number of issued subscriptions. When lock is true the plan row is
+// locked so concurrent issuers inside transactions are serialized per plan.
+func checkSubscriptionPlanStock(db *gorm.DB, planId int, lock bool) error {
+	return checkSubscriptionPlanStockFor(db, planId, lock, 1, 0)
+}
+
+// checkSubscriptionPlanStockFor verifies that `need` more slots are available.
+// excludeRedemptionId skips one redemption code from the reserved count (used when editing it).
+func checkSubscriptionPlanStockFor(db *gorm.DB, planId int, lock bool, need int, excludeRedemptionId int) error {
+	if db == nil || planId <= 0 {
+		return errors.New("invalid plan id")
+	}
+	query := db
+	if lock {
+		query = lockForUpdate(db)
+	}
+	var plan SubscriptionPlan
+	if err := query.Select("id", "stock_total").Where("id = ?", planId).First(&plan).Error; err != nil {
+		return err
+	}
+	if plan.StockTotal <= 0 {
+		return nil
+	}
+	count, err := countSubscriptionPlanIssuedExcluding(db, planId, excludeRedemptionId)
+	if err != nil {
+		return err
+	}
+	if count+int64(need) > int64(plan.StockTotal) {
+		return ErrSubscriptionPlanSoldOut
+	}
+	return nil
+}
+
+// CheckSubscriptionPlanStock is the pre-order check used before creating a payment order.
+func CheckSubscriptionPlanStock(planId int) error {
+	return checkSubscriptionPlanStock(DB, planId, false)
+}
+
+// FillSubscriptionPlanStockSold sets StockSold of each plan to the number of its
+// subscriptions still occupying stock (active and not yet ended).
+func FillSubscriptionPlanStockSold(plans []SubscriptionPlan) error {
+	if len(plans) == 0 {
+		return nil
+	}
+	ids := make([]int, 0, len(plans))
+	for _, p := range plans {
+		ids = append(ids, p.Id)
+	}
+	var rows []struct {
+		PlanId int
+		Cnt    int64
+	}
+	if err := DB.Model(&UserSubscription{}).
+		Select("plan_id, COUNT(*) AS cnt").
+		Where("plan_id IN ? AND status = ? AND end_time > ?", ids, "active", common.GetTimestamp()).
+		Group("plan_id").
+		Scan(&rows).Error; err != nil {
+		return err
+	}
+	counts := make(map[int]int64, len(rows))
+	for _, r := range rows {
+		counts[r.PlanId] = r.Cnt
+	}
+	// Outstanding subscription redemption codes also occupy stock.
+	var reservedRows []struct {
+		PlanId int
+		Cnt    int64
+	}
+	if err := redemptionReservesStockQuery(DB).
+		Select("plan_id, COUNT(*) AS cnt").
+		Where("plan_id IN ?", ids).
+		Group("plan_id").
+		Scan(&reservedRows).Error; err != nil {
+		return err
+	}
+	for _, r := range reservedRows {
+		counts[r.PlanId] += r.Cnt
+	}
+	for i := range plans {
+		plans[i].StockSold = int(counts[plans[i].Id])
+	}
 	return nil
 }
 
@@ -618,6 +765,13 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
 			return err
 		}
+		// Lock the plan row so stock counting stays serialized with balance purchases and
+		// admin grants. The order is already paid, so it is completed even if stock ran out
+		// concurrently; new orders are blocked by CheckSubscriptionPlanStock.
+		var planRow SubscriptionPlan
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", plan.Id).First(&planRow).Error; err != nil {
+			return err
+		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
 		if err != nil {
 			return err
@@ -738,6 +892,10 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (*common.M
 		if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
 			return err
 		}
+		// Admin grants also consume plan stock.
+		if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+			return err
+		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "admin")
 		if err == nil {
 			groupChanged = subscription.PrevUserGroup != ""
@@ -803,6 +961,10 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 		}
 		if requiredQuota > 0 && user.Quota < requiredQuota {
 			return common.NewMessage("Insufficient balance")
+		}
+		// Lock the plan row and count issued subscriptions before charging; fails when sold out.
+		if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+			return err
 		}
 		if requiredQuota > 0 {
 			if err := tx.Model(&User{}).Where("id = ?", userId).

@@ -34,9 +34,14 @@ import { REDEMPTION_FILTER_EXPIRED, REDEMPTION_STATUSES } from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
 import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
+import {
+  getPlanLabel,
+  useSubscriptionPlanTitles,
+} from './use-subscription-plan-titles'
 
 export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
   const { t } = useTranslation()
+  const planTitles = useSubscriptionPlanTitles()
   return [
     {
       id: 'select',
@@ -158,6 +163,19 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       accessorKey: 'quota',
       header: t('Quota'),
       cell: ({ row }) => {
+        const planId = row.original.plan_id ?? 0
+        if (planId > 0) {
+          return (
+            <StatusBadge
+              label={t('Subscription: {{plan}}', {
+                plan: getPlanLabel(planTitles, planId),
+              })}
+              variant='neutral'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          )
+        }
         const quota = row.getValue('quota') as number
         return (
           <StatusBadge

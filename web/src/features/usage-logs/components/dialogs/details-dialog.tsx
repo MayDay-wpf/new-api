@@ -779,6 +779,26 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
+          {!isLogin && isDisplayableType(props.log.type) && (
+            <DetailRow
+              label={t('Source')}
+              value={other?.user_agent?.trim() || t('Unknown')}
+              mono
+            />
+          )}
+
+          {other?.discount_ratio != null && other.discount_ratio > 0 && (
+            <DetailRow
+              label={t('Discount ratio')}
+              value={
+                props.isAdmin && other.admin_info?.discount_rule
+                  ? `× ${other.discount_ratio} (${other.admin_info.discount_rule})`
+                  : `× ${other.discount_ratio}`
+              }
+              mono
+            />
+          )}
+
           {showTiming && props.log.use_time > 0 && (
             <DetailRow
               label={t('Response Time')}

@@ -59,6 +59,21 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 		groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
 	}
 
+	// Admin billing discounts apply to every channel, so they are folded into
+	// the group ratio that every pre-consume and settlement path multiplies.
+	userAgent := ""
+	if ctx.Request != nil {
+		userAgent = ctx.Request.UserAgent()
+	}
+	if discount, name, ok := operation_setting.ResolveBillingDiscount(relayInfo.UserId, userAgent); ok {
+		groupRatioInfo.GroupRatio *= discount
+		if groupRatioInfo.HasSpecialRatio {
+			groupRatioInfo.GroupSpecialRatio *= discount
+		}
+		groupRatioInfo.DiscountRatio = discount
+		groupRatioInfo.DiscountName = name
+	}
+
 	return groupRatioInfo
 }
 

@@ -39,6 +39,10 @@ func GetSubscriptionPlans(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.FillSubscriptionPlanStockSold(plans); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
 		p.NormalizeDefaults()
@@ -123,6 +127,10 @@ func AdminListSubscriptionPlans(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.FillSubscriptionPlanStockSold(plans); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	result := make([]SubscriptionPlanDTO, 0, len(plans))
 	for _, p := range plans {
 		p.NormalizeDefaults()
@@ -178,6 +186,10 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 	}
 	if req.Plan.MaxPurchasePerUser < 0 {
 		common.ApiErrorT(c, "Purchase limit cannot be negative")
+		return
+	}
+	if req.Plan.StockTotal < 0 {
+		common.ApiErrorT(c, "Stock cannot be negative")
 		return
 	}
 	if req.Plan.TotalAmount < 0 {
@@ -254,6 +266,10 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorT(c, "Purchase limit cannot be negative")
 		return
 	}
+	if req.Plan.StockTotal < 0 {
+		common.ApiErrorT(c, "Stock cannot be negative")
+		return
+	}
 	if req.Plan.TotalAmount < 0 {
 		common.ApiErrorT(c, "Total quota cannot be negative")
 		return
@@ -294,6 +310,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"creem_product_id":           req.Plan.CreemProductId,
 			"waffo_pancake_product_id":   req.Plan.WaffoPancakeProductId,
 			"max_purchase_per_user":      req.Plan.MaxPurchasePerUser,
+			"stock_total":                req.Plan.StockTotal,
 			"total_amount":               req.Plan.TotalAmount,
 			"upgrade_group":              req.Plan.UpgradeGroup,
 			"downgrade_group":            req.Plan.DowngradeGroup,

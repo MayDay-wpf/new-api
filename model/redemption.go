@@ -23,6 +23,34 @@ type Redemption struct {
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+	// PlanId 大于 0 表示订阅兑换码：兑换时为用户开通该订阅方案，Quota 不生效。
+	PlanId int `json:"plan_id" gorm:"default:0"`
+}
+
+// IsSubscription reports whether this code grants a subscription plan instead of wallet quota.
+func (redemption *Redemption) IsSubscription() bool {
+	return redemption.PlanId > 0
+}
+
+// RedeemResult describes what a successful redemption granted.
+type RedeemResult struct {
+	Quota     int    `json:"quota"`
+	PlanId    int    `json:"plan_id,omitempty"`
+	PlanTitle string `json:"plan_title,omitempty"`
+}
+
+// validateRedemptionValue checks the granted value: quota for balance codes, plan for subscription codes.
+func (redemption *Redemption) validateRedemptionValue() error {
+	if redemption.IsSubscription() {
+		if _, err := GetSubscriptionPlanById(redemption.PlanId); err != nil {
+			return common.NewMessage("Subscription plan not found")
+		}
+		return nil
+	}
+	if redemption.Quota <= 0 {
+		return errors.New("redemption quota must be positive")
+	}
+	return common.ValidateWalletQuota(redemption.Quota)
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -134,20 +162,32 @@ func GetRedemptionById(id int) (*Redemption, error) {
 }
 
 func Redeem(key string, userId int) (quota int, err error) {
+	result, err := RedeemCode(key, userId)
+	if err != nil {
+		return 0, err
+	}
+	return result.Quota, nil
+}
+
+// RedeemCode redeems a balance or subscription code and reports what was granted.
+func RedeemCode(key string, userId int) (*RedeemResult, error) {
 	if key == "" {
-		return 0, errors.New("redemption code not provided")
+		return nil, errors.New("redemption code not provided")
 	}
 	if userId == 0 {
-		return 0, errors.New("invalid user id")
+		return nil, errors.New("invalid user id")
 	}
 	redemption := &Redemption{}
+	var plan *SubscriptionPlan
+	var subscriptionErr *common.Message
+	groupChanged := false
 
 	keyCol := "`key`"
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		keyCol = `"key"`
 	}
 	common.RandomSleep()
-	err = DB.Transaction(func(tx *gorm.DB) error {
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		err := lockForUpdate(tx).Where(keyCol+" = ?", key).First(redemption).Error
 		if err != nil {
 			return errors.New("invalid redemption code")
@@ -174,27 +214,98 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if result.RowsAffected == 0 {
 			return errors.New("redemption code already used")
 		}
-		return creditTopUpQuota(tx, userId, redemption.Quota, nil)
+		if !redemption.IsSubscription() {
+			return creditTopUpQuota(tx, userId, redemption.Quota, nil)
+		}
+		// Subscription code: same order as AdminBindSubscription (lock user, then plan stock).
+		// The code was flipped to "used" above, so its own reserved slot is already released
+		// from the count and the stock check below effectively consumes that slot.
+		var userRow User
+		if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
+			return err
+		}
+		plan, err = getSubscriptionPlanByIdTx(tx, redemption.PlanId)
+		if err != nil {
+			return err
+		}
+		if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+			var msg *common.Message
+			if errors.As(err, &msg) {
+				subscriptionErr = msg
+			}
+			return err
+		}
+		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "redemption")
+		if err != nil {
+			var msg *common.Message
+			if errors.As(err, &msg) {
+				subscriptionErr = msg
+			}
+			return err
+		}
+		groupChanged = subscription.PrevUserGroup != ""
+		return nil
 	})
 	if err != nil {
 		common.SysError(common.LogText("redemption failed: %s", err.Error()))
-		return 0, ErrRedeemFailed
+		// Plan-level rejections (sold out, purchase limit) are shown to the user;
+		// everything else stays generic so the code state is not leaked.
+		if subscriptionErr != nil {
+			return nil, subscriptionErr
+		}
+		return nil, ErrRedeemFailed
+	}
+	if redemption.IsSubscription() {
+		if groupChanged {
+			refreshSubscriptionUserGroupCache(userId, common.LogText("subscription redemption"))
+		}
+		RecordLog(userId, LogTypeTopup, common.NewMessage("Redeemed subscription plan {{plan}} with a redemption code, code ID {{id}}", map[string]any{"plan": plan.Title, "id": redemption.Id}))
+		return &RedeemResult{PlanId: plan.Id, PlanTitle: plan.Title}, nil
 	}
 	syncCreditUserQuotaCache(userId, redemption.Quota, common.LogText("redemption"))
 	RecordLog(userId, LogTypeTopup, common.NewMessage("Topped up {{quota}} with a redemption code, code ID {{id}}", map[string]any{"quota": logger.FormatQuota(redemption.Quota), "id": redemption.Id}))
-	return redemption.Quota, nil
+	return &RedeemResult{Quota: redemption.Quota}, nil
 }
 
 func (redemption *Redemption) Insert() error {
-	if redemption.Quota <= 0 {
-		return errors.New("redemption quota must be positive")
-	}
-	if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+	if err := redemption.validateRedemptionValue(); err != nil {
 		return err
 	}
 	var err error
 	err = DB.Create(redemption).Error
 	return err
+}
+
+// InsertSubscriptionRedemptions creates subscription codes for one plan atomically.
+// Every unredeemed code reserves one slot of the plan stock, so the whole batch is
+// checked against the remaining stock under the plan row lock.
+func InsertSubscriptionRedemptions(redemptions []*Redemption) error {
+	if len(redemptions) == 0 {
+		return nil
+	}
+	planId := redemptions[0].PlanId
+	for _, r := range redemptions {
+		if r.PlanId <= 0 || r.PlanId != planId {
+			return errors.New("subscription redemptions must share one plan")
+		}
+	}
+	if err := redemptions[0].validateRedemptionValue(); err != nil {
+		return err
+	}
+	return DB.Transaction(func(tx *gorm.DB) error {
+		need := 0
+		for _, r := range redemptions {
+			if redemptionReservesStock(r) {
+				need++
+			}
+		}
+		if need > 0 {
+			if err := checkSubscriptionPlanStockFor(tx, planId, true, need, 0); err != nil {
+				return err
+			}
+		}
+		return tx.Create(&redemptions).Error
+	})
 }
 
 func (redemption *Redemption) SelectUpdate() error {
@@ -204,15 +315,26 @@ func (redemption *Redemption) SelectUpdate() error {
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
-	if redemption.Quota <= 0 {
-		return errors.New("redemption quota must be positive")
-	}
-	if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+	if err := redemption.validateRedemptionValue(); err != nil {
 		return err
 	}
-	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
-	return err
+	return DB.Transaction(func(tx *gorm.DB) error {
+		// A subscription code that newly starts holding stock (plan changed, expiry
+		// extended, ...) must fit into the remaining stock of its plan.
+		if redemptionReservesStock(redemption) {
+			var old Redemption
+			if err := tx.Where("id = ?", redemption.Id).First(&old).Error; err != nil {
+				return err
+			}
+			alreadyReserved := old.PlanId == redemption.PlanId && redemptionReservesStock(&old)
+			if !alreadyReserved {
+				if err := checkSubscriptionPlanStockFor(tx, redemption.PlanId, true, 1, redemption.Id); err != nil {
+					return err
+				}
+			}
+		}
+		return tx.Model(redemption).Select("name", "status", "quota", "plan_id", "redeemed_time", "expired_time").Updates(redemption).Error
+	})
 }
 
 func (redemption *Redemption) Delete() error {

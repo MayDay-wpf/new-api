@@ -134,7 +134,21 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendParamOverrideInfo(relayInfo, other)
 	appendRequestPluginRecord(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
+	appendBillingDiscountInfo(relayInfo.PriceData.GroupRatioInfo, other)
 	return other
+}
+
+// appendBillingDiscountInfo records the admin billing discount folded into
+// group_ratio. The ratio is public so users can see why they were charged
+// less; the matched rule name stays admin-only.
+func appendBillingDiscountInfo(info hosttypes.GroupRatioInfo, other *model.LogOther) {
+	if other == nil || info.DiscountRatio <= 0 {
+		return
+	}
+	other.SetPublic("discount_ratio", info.DiscountRatio)
+	if info.DiscountName != "" {
+		other.SetAdmin("discount_rule", info.DiscountName)
+	}
 }
 
 func AppendResponseModelLogInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) {
@@ -339,6 +353,7 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.P
 	if priceData.GroupRatioInfo.HasSpecialRatio {
 		other.SetPublic("user_group_ratio", priceData.GroupRatioInfo.GroupSpecialRatio)
 	}
+	appendBillingDiscountInfo(priceData.GroupRatioInfo, other)
 	appendRequestPath(nil, relayInfo, other)
 	appendRequestPluginRecord(relayInfo, other)
 	return other

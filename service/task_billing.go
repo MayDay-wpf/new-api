@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
@@ -61,6 +62,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, task *model
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other.SetPublic("user_group_ratio", info.PriceData.GroupRatioInfo.GroupSpecialRatio)
 	}
+	appendBillingDiscountInfo(info.PriceData.GroupRatioInfo, other)
 	if info.IsModelMapped {
 		other.SetPublic("is_model_mapped", true)
 		other.SetPublic("upstream_model_name", info.UpstreamModelName)
@@ -417,6 +419,11 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 		finalGroupRatio = userGroupRatio
 	} else {
 		finalGroupRatio = groupRatio
+	}
+	// The discount matched at submission (user / User-Agent) stays frozen in
+	// the billing context because polling has no request to re-match against.
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.DiscountRatio > 0 && bc.DiscountRatio <= operation_setting.MaxBillingDiscountRatio {
+		finalGroupRatio *= bc.DiscountRatio
 	}
 
 	// 计算 OtherRatios 乘积（视频折扣、时长等）

@@ -387,6 +387,16 @@ func UpdateOption(c *gin.Context) {
 				return
 			}
 		}
+	case "billing_discount_setting.rules":
+		var rules []operation_setting.BillingDiscountRule
+		if err = common.UnmarshalJsonStr(option.Value.(string), &rules); err != nil {
+			common.ApiErrorMsg(c, "billing discount rules must be a JSON array")
+			return
+		}
+		if err = operation_setting.ValidateBillingDiscountRules(rules); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
 		if err != nil {

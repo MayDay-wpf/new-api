@@ -49,6 +49,10 @@ func SubscriptionRequestCreemPay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
+	if err := model.CheckSubscriptionPlanStock(plan.Id); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	if plan.CreemProductId == "" {
 		common.ApiErrorT(c, "CreemProductId is not configured for this plan")
 		return

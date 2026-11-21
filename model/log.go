@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -146,6 +147,57 @@ func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	return logs, err
 }
 
+// RecentLogUserAgent is a distinct User-Agent seen in recent consume logs.
+type RecentLogUserAgent struct {
+	UserAgent string `json:"user_agent"`
+	Count     int    `json:"count"`
+}
+
+// GetRecentLogUserAgents scans the newest consume logs and returns their
+// distinct public user_agent values, most frequent first. It reads the
+// existing other JSON instead of a dedicated column, so legacy rows without
+// the key are simply skipped.
+func GetRecentLogUserAgents(scanLimit int, resultLimit int) ([]RecentLogUserAgent, error) {
+	order := "id desc"
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		order = clickHouseLogOrder("")
+	}
+	var others []string
+	err := LOG_DB.Model(&Log{}).Where("type = ?", LogTypeConsume).Order(order).Limit(scanLimit).Pluck("other", &others).Error
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int)
+	for _, raw := range others {
+		if raw == "" {
+			continue
+		}
+		var parsed struct {
+			UserAgent string `json:"user_agent"`
+		}
+		if common.UnmarshalJsonStr(raw, &parsed) != nil {
+			continue
+		}
+		if ua := strings.TrimSpace(parsed.UserAgent); ua != "" {
+			counts[ua]++
+		}
+	}
+	result := make([]RecentLogUserAgent, 0, len(counts))
+	for ua, count := range counts {
+		result = append(result, RecentLogUserAgent{UserAgent: ua, Count: count})
+	}
+	slices.SortFunc(result, func(a, b RecentLogUserAgent) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.UserAgent, b.UserAgent)
+	})
+	if len(result) > resultLimit {
+		result = result[:resultLimit]
+	}
+	return result, nil
+}
+
 func RecordLog(userId int, logType int, content *common.Message) {
 	if logType == LogTypeConsume && !common.LogConsumeEnabled {
 		return
@@ -282,6 +334,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
+	other = withRequestUserAgent(c, other)
 	otherStr := other.JSONString()
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -349,7 +402,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
-	other := params.Other
+	other := withRequestUserAgent(c, params.Other)
 	content := other.setContent(params.Content)
 	otherStr := other.JSONString()
 	// 判断是否需要记录 IP

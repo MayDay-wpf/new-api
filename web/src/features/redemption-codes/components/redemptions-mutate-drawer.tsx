@@ -31,6 +31,7 @@ import {
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
   FormControl,
@@ -41,6 +42,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Sheet,
   SheetClose,
@@ -50,6 +53,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { getAdminPlans } from '@/features/subscriptions/api'
+import type { PlanRecord } from '@/features/subscriptions/types'
 import {
   formatQuotaWithCurrency,
   getCurrencyDisplay,
@@ -109,6 +114,39 @@ export function RedemptionsMutateDrawer({
     resolver: zodResolver(getRedemptionFormSchema(t)),
     defaultValues: REDEMPTION_FORM_DEFAULT_VALUES,
   })
+  const redemptionType = form.watch('type')
+  const isSubscriptionType = redemptionType === 'subscription'
+  const [plans, setPlans] = useState<PlanRecord[]>([])
+  const [plansLoaded, setPlansLoaded] = useState(false)
+
+  // Load subscription plans lazily, only when a subscription code is being edited/created
+  useEffect(() => {
+    if (!open || !isSubscriptionType || plansLoaded) return
+    let ignoreResult = false
+    void getAdminPlans()
+      .then((result) => {
+        if (ignoreResult) return
+        if (result.success) {
+          setPlans(result.data || [])
+          setPlansLoaded(true)
+        } else {
+          handleServerError(result)
+        }
+      })
+      .catch((error: unknown) => {
+        if (!ignoreResult) handleServerError(error)
+      })
+    return () => {
+      ignoreResult = true
+    }
+  }, [open, isSubscriptionType, plansLoaded])
+
+  useEffect(() => {
+    if (!open) setPlansLoaded(false)
+  }, [open])
+
+  const getPlanTitle = (planId: number) =>
+    plans.find((p) => p.plan.id === planId)?.plan.title || `#${planId}`
 
   // Load existing data when updating
   useEffect(() => {
@@ -177,9 +215,13 @@ export function RedemptionsMutateDrawer({
       const basePayload = transformFormDataToPayload(data)
 
       if (isUpdate && currentRow && loadedRedemption) {
-        const quota = form.getFieldState('quota_dollars').isDirty
-          ? basePayload.quota
-          : loadedRedemption.quota
+        const keepLoadedQuota =
+          data.type === 'quota' &&
+          (loadedRedemption.plan_id ?? 0) <= 0 &&
+          !form.getFieldState('quota_dollars').isDirty
+        const quota = keepLoadedQuota
+          ? loadedRedemption.quota
+          : basePayload.quota
         const result = await updateRedemption({
           ...basePayload,
           quota,
@@ -208,9 +250,12 @@ export function RedemptionsMutateDrawer({
             setCreatedCodes({
               keys: result.data,
               name: basePayload.name,
-              quota: formatQuotaWithCurrency(basePayload.quota, {
-                abbreviate: false,
-              }),
+              quota:
+                basePayload.plan_id > 0
+                  ? getPlanTitle(basePayload.plan_id)
+                  : formatQuotaWithCurrency(basePayload.quota, {
+                      abbreviate: false,
+                    }),
             })
           }
           onOpenChange(false)
@@ -230,8 +275,17 @@ export function RedemptionsMutateDrawer({
     if (!isUpdate) {
       const name = form.getValues('name')
       if (!name?.trim()) {
-        const quota = parseQuotaFromDollars(form.getValues('quota_dollars'))
-        form.setValue('name', formatQuota(quota), { shouldValidate: true })
+        const planId = form.getValues('plan_id')
+        if (form.getValues('type') === 'subscription') {
+          if (planId > 0) {
+            form.setValue('name', getPlanTitle(planId).slice(0, 20), {
+              shouldValidate: true,
+            })
+          }
+        } else {
+          const quota = parseQuotaFromDollars(form.getValues('quota_dollars'))
+          form.setValue('name', formatQuota(quota), { shouldValidate: true })
+        }
       }
     }
 
@@ -293,6 +347,64 @@ export function RedemptionsMutateDrawer({
                 <SideDrawerSection>
                   <FormField
                     control={form.control}
+                    name='type'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Redemption code type')}</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value}
+                            onValueChange={(value) => {
+                              if (
+                                value === 'quota' ||
+                                value === 'subscription'
+                              ) {
+                                field.onChange(value)
+                              }
+                            }}
+                            disabled={isUpdate}
+                            className='flex flex-wrap gap-x-5 gap-y-3'
+                          >
+                            {[
+                              { value: 'quota', label: t('Balance') },
+                              {
+                                value: 'subscription',
+                                label: t('Subscription'),
+                              },
+                            ].map((option) => (
+                              <div
+                                key={option.value}
+                                className='flex items-center gap-2'
+                              >
+                                <RadioGroupItem
+                                  value={option.value}
+                                  id={`redemption-type-${option.value}`}
+                                />
+                                <Label
+                                  htmlFor={`redemption-type-${option.value}`}
+                                >
+                                  {option.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        </FormControl>
+                        <FormDescription>
+                          {isSubscriptionType
+                            ? t(
+                                'Redeeming grants the selected subscription plan. Each unredeemed code reserves one unit of plan stock.'
+                              )
+                            : t(
+                                "Redeeming adds the quota to the user's balance."
+                              )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name='name'
                     render={({ field }) => (
                       <FormItem>
@@ -308,36 +420,77 @@ export function RedemptionsMutateDrawer({
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name='quota_dollars'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{quotaLabel}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            step={quotaStep}
-                            placeholder={quotaPlaceholder}
-                            onChange={(e) =>
-                              field.onChange(
-                                Number.parseFloat(e.target.value) || 0
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {tokensOnly
-                            ? t('Enter the quota amount in tokens')
-                            : t('Enter the quota amount in {{currency}}', {
-                                currency: currencyLabel,
+                  {isSubscriptionType ? (
+                    <FormField
+                      control={form.control}
+                      name='plan_id'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Subscription plan')}</FormLabel>
+                          <FormControl>
+                            <Combobox
+                              options={plans.map((p) => {
+                                const stockTotal = p.plan.stock_total ?? 0
+                                const remaining = Math.max(
+                                  stockTotal - (p.plan.stock_sold ?? 0),
+                                  0
+                                )
+                                return {
+                                  value: String(p.plan.id),
+                                  label:
+                                    stockTotal > 0
+                                      ? `${p.plan.title} (${t('Remaining Stock')}: ${remaining})`
+                                      : p.plan.title,
+                                }
                               })}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                              value={field.value > 0 ? String(field.value) : ''}
+                              onValueChange={(v) =>
+                                v !== null && field.onChange(Number(v) || 0)
+                              }
+                              placeholder={t('Select subscription plan')}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t(
+                              'Creation fails if the remaining plan stock is less than the number of codes.'
+                            )}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <FormField
+                      control={form.control}
+                      name='quota_dollars'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{quotaLabel}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type='number'
+                              step={quotaStep}
+                              placeholder={quotaPlaceholder}
+                              onChange={(e) =>
+                                field.onChange(
+                                  Number.parseFloat(e.target.value) || 0
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {tokensOnly
+                              ? t('Enter the quota amount in tokens')
+                              : t('Enter the quota amount in {{currency}}', {
+                                  currency: currencyLabel,
+                                })}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   <FormField
                     control={form.control}

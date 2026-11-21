@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"unicode/utf8"
@@ -84,20 +85,58 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorT(c, "Maximum 100 redemption codes can be generated at once")
 		return
 	}
-	if redemption.Quota <= 0 {
-		common.ApiErrorT(c, "Redemption quota must be positive")
-		return
-	}
-	if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
-		common.ApiError(c, err)
-		return
+	var planTitle string
+	if redemption.PlanId > 0 {
+		plan, err := model.GetSubscriptionPlanById(redemption.PlanId)
+		if err != nil {
+			common.ApiErrorT(c, "Subscription plan not found")
+			return
+		}
+		planTitle = plan.Title
+		redemption.Quota = 0
+	} else {
+		if redemption.Quota <= 0 {
+			common.ApiErrorT(c, "Redemption quota must be positive")
+			return
+		}
+		if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 	if err := validateExpiredTime(redemption.ExpiredTime); err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	var keys []string
-	for i := 0; i < redemption.Count; i++ {
+	if redemption.PlanId > 0 {
+		// Subscription codes reserve plan stock, so the batch is created atomically.
+		batch := make([]*model.Redemption, 0, redemption.Count)
+		for i := 0; i < redemption.Count; i++ {
+			batch = append(batch, &model.Redemption{
+				UserId:      c.GetInt("id"),
+				Name:        redemption.Name,
+				Key:         common.GetUUID(),
+				Status:      common.RedemptionCodeStatusEnabled,
+				CreatedTime: common.GetTimestamp(),
+				PlanId:      redemption.PlanId,
+				ExpiredTime: redemption.ExpiredTime,
+			})
+		}
+		if err := model.InsertSubscriptionRedemptions(batch); err != nil {
+			common.SysError(common.LogText("failed to insert subscription redemptions: %s", err.Error()))
+			if errors.Is(err, model.ErrSubscriptionPlanSoldOut) {
+				common.ApiErrorT(c, "Insufficient plan stock for this many redemption codes")
+				return
+			}
+			common.ApiErrorT(c, "Failed to create redemption code, please try again later")
+			return
+		}
+		for _, r := range batch {
+			keys = append(keys, r.Key)
+		}
+	}
+	for i := 0; redemption.PlanId <= 0 && i < redemption.Count; i++ {
 		key := common.GetUUID()
 		cleanRedemption := model.Redemption{
 			UserId:      c.GetInt("id"),
@@ -105,6 +144,7 @@ func AddRedemption(c *gin.Context) {
 			Key:         key,
 			CreatedTime: common.GetTimestamp(),
 			Quota:       redemption.Quota,
+			PlanId:      redemption.PlanId,
 			ExpiredTime: redemption.ExpiredTime,
 		}
 		err = cleanRedemption.Insert()
@@ -115,11 +155,17 @@ func AddRedemption(c *gin.Context) {
 		}
 		keys = append(keys, key)
 	}
-	recordManageAudit(c, "redemption.create", map[string]any{
+	auditDetails := map[string]any{
 		"name":  redemption.Name,
 		"count": redemption.Count,
-		"quota": logger.FormatQuota(redemption.Quota),
-	})
+	}
+	if redemption.PlanId > 0 {
+		auditDetails["plan_id"] = redemption.PlanId
+		auditDetails["plan_title"] = planTitle
+	} else {
+		auditDetails["quota"] = logger.FormatQuota(redemption.Quota)
+	}
+	recordManageAudit(c, "redemption.create", auditDetails)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -156,13 +202,21 @@ func UpdateRedemption(c *gin.Context) {
 		return
 	}
 	if statusOnly == "" {
-		if redemption.Quota <= 0 {
-			common.ApiErrorT(c, "Redemption quota must be positive")
-			return
-		}
-		if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
-			common.ApiError(c, err)
-			return
+		if redemption.PlanId > 0 {
+			if _, err := model.GetSubscriptionPlanById(redemption.PlanId); err != nil {
+				common.ApiErrorT(c, "Subscription plan not found")
+				return
+			}
+			redemption.Quota = 0
+		} else {
+			if redemption.Quota <= 0 {
+				common.ApiErrorT(c, "Redemption quota must be positive")
+				return
+			}
+			if err := common.ValidateWalletQuota(redemption.Quota); err != nil {
+				common.ApiError(c, err)
+				return
+			}
 		}
 		if err := validateExpiredTime(redemption.ExpiredTime); err != nil {
 			common.ApiError(c, err)
@@ -171,6 +225,7 @@ func UpdateRedemption(c *gin.Context) {
 		// If you add more fields, please also update redemption.Update()
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
+		cleanRedemption.PlanId = redemption.PlanId
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
 	}
 	if statusOnly != "" {

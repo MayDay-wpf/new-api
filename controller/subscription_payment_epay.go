@@ -41,6 +41,10 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
+	if err := model.CheckSubscriptionPlanStock(plan.Id); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	if plan.PriceAmount < 0.01 {
 		common.ApiErrorT(c, "Plan amount is too low")
 		return

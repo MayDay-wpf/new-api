@@ -25,6 +25,7 @@ import { PaymentSettingsSection } from '../integrations/payment-settings-section
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { BillingDiscountSection } from './discount/billing-discount-section'
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -203,6 +204,15 @@ const BILLING_SECTIONS = [
           minQuota: settings['checkin_setting.min_quota'],
           maxQuota: settings['checkin_setting.max_quota'],
         }}
+      />
+    ),
+  },
+  {
+    id: 'discounts',
+    titleKey: 'Discount Management',
+    build: (settings: BillingSettings) => (
+      <BillingDiscountSection
+        rulesJson={settings['billing_discount_setting.rules'] ?? '[]'}
       />
     ),
   },

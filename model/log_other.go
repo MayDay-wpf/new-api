@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -89,6 +91,31 @@ func (o *LogOther) setContent(parts []*common.Message) string {
 		texts = append(texts, part.Error())
 	}
 	return strings.Join(texts, ", ")
+}
+
+// maxLogUserAgentLength bounds the stored client User-Agent so an oversized
+// header cannot bloat every usage-log row.
+const maxLogUserAgentLength = 512
+
+// withRequestUserAgent records the caller's User-Agent header as the public
+// user_agent field, which the usage-log view shows as the request source.
+// It allocates a LogOther when the caller passed nil.
+func withRequestUserAgent(c *gin.Context, other *LogOther) *LogOther {
+	if c == nil || c.Request == nil {
+		return other
+	}
+	userAgent := strings.TrimSpace(c.Request.UserAgent())
+	if userAgent == "" {
+		return other
+	}
+	if len(userAgent) > maxLogUserAgentLength {
+		userAgent = strings.ToValidUTF8(userAgent[:maxLogUserAgentLength], "")
+	}
+	if other == nil {
+		other = NewLogOther()
+	}
+	other.SetPublic("user_agent", userAgent)
+	return other
 }
 
 func (o *LogOther) SetAdmin(key string, value any) bool {

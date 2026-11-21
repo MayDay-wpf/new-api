@@ -40,6 +40,10 @@ func SubscriptionRequestWaffoPancakePay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
+	if err := model.CheckSubscriptionPlanStock(plan.Id); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	if strings.TrimSpace(plan.WaffoPancakeProductId) == "" {
 		common.ApiErrorT(c, "WaffoPancakeProductId is not configured for this plan")
 		return

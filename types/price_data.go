@@ -19,6 +19,10 @@ type GroupRatioInfo struct {
 	GroupRatio        float64
 	GroupSpecialRatio float64
 	HasSpecialRatio   bool
+	// DiscountRatio is the admin billing discount already folded into
+	// GroupRatio (and GroupSpecialRatio); 0 means no discount matched.
+	DiscountRatio float64
+	DiscountName  string
 }
 
 type PriceData struct {

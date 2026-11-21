@@ -817,6 +817,44 @@ export function useCommonLogsColumns(
       },
 
       {
+        id: 'source',
+        header: t('Source'),
+        accessorFn: (row) => parseLogOther(row.other)?.user_agent ?? '',
+        cell: ({ row }) => {
+          const log = row.original
+          if (!isDisplayableLogType(log.type)) return null
+
+          const userAgent = parseLogOther(log.other)?.user_agent?.trim()
+          if (!userAgent) {
+            return (
+              <span className='text-muted-foreground/60 text-xs'>
+                {t('Unknown')}
+              </span>
+            )
+          }
+
+          return (
+            <TooltipProvider delay={300}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='text-muted-foreground block max-w-[160px] truncate font-mono text-xs' />
+                  }
+                >
+                  {userAgent}
+                </TooltipTrigger>
+                <TooltipContent side='top' className='max-w-xs break-all'>
+                  {userAgent}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        meta: { label: t('Source') },
+        size: 160,
+      },
+
+      {
         accessorKey: 'content',
         header: t('Details'),
         cell: function DetailsCell({ row }) {
