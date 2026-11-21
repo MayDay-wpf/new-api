@@ -39,7 +39,12 @@ import {
   paySubscriptionWaffoPancake,
   paySubscriptionBalance,
 } from '../../api'
-import { formatDuration, formatResetPeriod } from '../../lib'
+import {
+  formatDuration,
+  formatQuotaLimitWindow,
+  formatResetPeriod,
+  quotaLimitKey,
+} from '../../lib'
 import type { PlanRecord } from '../../types'
 
 interface PaymentMethod {
@@ -102,6 +107,10 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const limitReached =
     (props.purchaseLimit || 0) > 0 &&
     (props.purchaseCount || 0) >= (props.purchaseLimit || 0)
+  const planQuotaLimits = plan.quota_limits || []
+  const legacyResetPeriod = formatResetPeriod(plan, t)
+  const showLegacyReset =
+    planQuotaLimits.length === 0 && legacyResetPeriod !== t('No Reset')
 
   const handlePayStripe = async () => {
     setPaying(true)
@@ -258,12 +267,29 @@ export function SubscriptionPurchaseDialog(props: Props) {
               {formatDuration(plan, t)}
             </span>
           </div>
-          {formatResetPeriod(plan, t) !== t('No Reset') && (
+          {planQuotaLimits.length > 0 && (
+            <div className='flex justify-between gap-3'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Quota Limits')}
+              </span>
+              <div className='flex flex-col items-end gap-0.5 text-sm'>
+                {planQuotaLimits.map((limit) => (
+                  <span key={quotaLimitKey(limit)}>
+                    {formatQuotaLimitWindow(limit, t)} ·{' '}
+                    {Number(limit.amount || 0) > 0
+                      ? formatQuota(Number(limit.amount || 0))
+                      : t('Unlimited')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {showLegacyReset && (
             <div className='flex justify-between'>
               <span className='text-muted-foreground text-sm'>
                 {t('Reset Period')}
               </span>
-              <span className='text-sm'>{formatResetPeriod(plan, t)}</span>
+              <span className='text-sm'>{legacyResetPeriod}</span>
             </div>
           )}
           <div className='flex items-center justify-between'>

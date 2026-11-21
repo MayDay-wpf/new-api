@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/http-client'
 import { authRequestOptions, authResult } from '@/lib/secure-verification'
 import { requireServerSuccess } from '@/lib/server-error-message'
+import { useAuthStore, type AuthUser } from '@/stores/auth-store'
 
 export {
   applyAuthBundle,
@@ -45,7 +46,18 @@ export async function getSelf() {
   const res = await api.get('/api/user/self', {
     skipErrorHandler: true,
   })
-  return res.data
+  const response = res.data
+  // Balance and group change outside the login flow (top-up, redemption,
+  // affiliate transfer), so mirror the fresh profile into the auth store to
+  // keep every view that renders `auth.user` (dashboard, wallet) in sync.
+  if (response?.success && response.data) {
+    const current = useAuthStore.getState().auth.user
+    useAuthStore.getState().auth.setUser({
+      ...(current ?? {}),
+      ...(response.data as Partial<AuthUser>),
+    } as AuthUser)
+  }
+  return response
 }
 
 export async function getUserModels(): Promise<{

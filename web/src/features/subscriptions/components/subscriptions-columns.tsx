@@ -26,7 +26,11 @@ import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { formatQuota } from '@/lib/format'
 
-import { formatDuration, formatResetPeriod } from '../lib'
+import {
+  formatDuration,
+  formatQuotaLimitWindow,
+  formatResetPeriod,
+} from '../lib'
 import type { PlanRecord } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
@@ -86,14 +90,26 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
       },
       {
         id: 'reset',
-        header: t('Quota Reset'),
+        header: t('Quota Limits'),
         meta: { mobileHidden: true },
-        cell: ({ row }) => (
-          <span className='text-muted-foreground'>
-            {formatResetPeriod(row.original.plan, t)}
-          </span>
-        ),
-        size: 100,
+        cell: ({ row }) => {
+          const limits = row.original.plan.quota_limits || []
+          if (limits.length === 0) {
+            return (
+              <span className='text-muted-foreground'>
+                {formatResetPeriod(row.original.plan, t)}
+              </span>
+            )
+          }
+          return (
+            <span className='text-muted-foreground'>
+              {limits
+                .map((limit) => formatQuotaLimitWindow(limit, t))
+                .join(' / ')}
+            </span>
+          )
+        },
+        size: 140,
       },
       {
         accessorFn: (row) => row.plan.sort_order,

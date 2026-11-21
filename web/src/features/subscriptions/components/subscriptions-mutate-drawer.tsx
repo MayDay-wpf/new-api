@@ -17,9 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarClock, CreditCard, RefreshCw, Settings2 } from "lucide-react";
+import {
+  CalendarClock,
+  CreditCard,
+  Plus,
+  RefreshCw,
+  Settings2,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -73,7 +80,10 @@ import {
   createWaffoPancakeSubscriptionProduct,
   listWaffoPancakeSubscriptionProductOptions,
 } from "../api";
-import { getDurationUnitOptions, getResetPeriodOptions } from "../constants";
+import {
+  getDurationUnitOptions,
+  getQuotaLimitPeriodOptions,
+} from "../constants";
 import {
   getPlanFormSchema,
   PLAN_FORM_DEFAULTS,
@@ -113,6 +123,14 @@ export function SubscriptionsMutateDrawer({
     resolver: zodResolver(schema) as unknown as Resolver<PlanFormValues>,
     defaultValues: PLAN_FORM_DEFAULTS,
   });
+  const {
+    fields: quotaLimitFields,
+    append: appendQuotaLimit,
+    remove: removeQuotaLimit,
+  } = useFieldArray({
+    control: form.control,
+    name: "quota_limits",
+  });
 
   useEffect(() => {
     if (open) {
@@ -151,7 +169,7 @@ export function SubscriptionsMutateDrawer({
   }, [open, currentRow, form]);
 
   const durationUnit = form.watch("duration_unit");
-  const resetPeriod = form.watch("quota_reset_period");
+  const quotaLimits = form.watch("quota_limits");
   // Gate "+ Create on Pancake" on the same checks the mint handler runs.
   const watchedTitle = form.watch("title");
   const watchedPrice = form.watch("price_amount");
@@ -263,7 +281,10 @@ export function SubscriptionsMutateDrawer({
   };
 
   const durationUnitOpts = getDurationUnitOptions(t);
-  const resetPeriodOpts = getResetPeriodOptions(t);
+  const quotaLimitPeriodOpts = [
+    { value: "five_hours", label: t("5 Hours") },
+    ...getQuotaLimitPeriodOptions(t),
+  ];
 
   return (
     <Sheet
@@ -394,7 +415,7 @@ export function SubscriptionsMutateDrawer({
                       </FormControl>
                       <FormDescription>
                         {t(
-                          "Total quota included in the plan, usable per billing period. 0 means unlimited.",
+                          "Total quota included in the plan. 0 means unlimited. Per-window caps are configured below.",
                         )}
                       </FormDescription>
                       <FormMessage />
@@ -487,7 +508,9 @@ export function SubscriptionsMutateDrawer({
                         />
                       </FormControl>
                       <FormDescription>
-                        {t("0 means unlimited")}
+                        {t(
+                          "Maximum active subscriptions of this plan per user. 0 means unlimited.",
+                        )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -703,73 +726,199 @@ export function SubscriptionsMutateDrawer({
               </div>
             </SideDrawerSection>
 
-            {/* Quota Reset */}
+            {/* Quota Limits */}
             <SideDrawerSection>
               <h3 className="flex items-center gap-2 text-sm font-medium">
                 <IconBadge tone="success" size="xs">
                   <RefreshCw />
                 </IconBadge>
-                {t("Quota Reset")}
+                {t("Quota Limits")}
               </h3>
+              <FormDescription>
+                {t(
+                  "Multiple limits are enforced at the same time. Each window resets independently, while the total quota remains the lifetime cap.",
+                )}
+              </FormDescription>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="quota_reset_period"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("Reset Cycle")}</FormLabel>
-                      <Select
-                        items={resetPeriodOpts.map((o) => ({
-                          value: o.value,
-                          label: o.label,
-                        }))}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {resetPeriodOpts.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>
-                                {o.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="space-y-3">
+                {quotaLimitFields.length === 0 && (
+                  <p className="text-muted-foreground text-xs">
+                    {t("No quota limits configured")}
+                  </p>
+                )}
 
-                <FormField
-                  control={form.control}
-                  name="quota_reset_custom_seconds"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("Custom Seconds")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          min={0}
-                          disabled={resetPeriod !== "custom"}
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseInt(e.target.value, 10) || 0,
-                            )
-                          }
+                {quotaLimitFields.map((limitField, index) => {
+                  const currentPeriod = quotaLimits?.[index]?.period;
+                  const currentCustomSeconds = Number(
+                    quotaLimits?.[index]?.custom_seconds || 0,
+                  );
+                  const windowValue =
+                    currentPeriod === "custom" && currentCustomSeconds === 18000
+                      ? "five_hours"
+                      : (currentPeriod ?? "daily");
+
+                  return (
+                    <div
+                      key={limitField.id}
+                      className="space-y-3 rounded-lg border p-3"
+                    >
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name={`quota_limits.${index}.period`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t("Limit Window")}</FormLabel>
+                              <Select
+                                items={quotaLimitPeriodOpts}
+                                value={windowValue}
+                                onValueChange={(value) => {
+                                  if (value === "five_hours") {
+                                    field.onChange("custom");
+                                    form.setValue(
+                                      `quota_limits.${index}.custom_seconds`,
+                                      18000,
+                                      {
+                                        shouldDirty: true,
+                                        shouldValidate: true,
+                                      },
+                                    );
+                                    return;
+                                  }
+                                  field.onChange(value);
+                                  if (value !== "custom") {
+                                    form.setValue(
+                                      `quota_limits.${index}.custom_seconds`,
+                                      0,
+                                      { shouldDirty: true },
+                                    );
+                                  }
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent alignItemWithTrigger={false}>
+                                  <SelectGroup>
+                                    {quotaLimitPeriodOpts.map((option) => (
+                                      <SelectItem
+                                        key={option.value}
+                                        value={option.value}
+                                      >
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
+                        <FormField
+                          control={form.control}
+                          name={`quota_limits.${index}.amount`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t("Limit Quota ({{currency}})", {
+                                  currency: currencyLabel,
+                                })}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min={0}
+                                  step={tokensOnly ? 1 : 0.01}
+                                  placeholder={
+                                    tokensOnly
+                                      ? t("Enter quota in tokens")
+                                      : t("Enter quota in {{currency}}", {
+                                          currency: currencyLabel,
+                                        })
+                                  }
+                                  onChange={(event) =>
+                                    field.onChange(
+                                      Number.parseFloat(event.target.value) ||
+                                        0,
+                                    )
+                                  }
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {currentPeriod === "custom" && (
+                        <FormField
+                          control={form.control}
+                          name={`quota_limits.${index}.custom_seconds`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>
+                                {t("Custom Window (seconds)")}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min={1}
+                                  onChange={(event) =>
+                                    field.onChange(
+                                      Number.parseInt(event.target.value, 10) ||
+                                        0,
+                                    )
+                                  }
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  "18000 seconds = 5 hours. Custom windows start from the subscription start time.",
+                                )}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeQuotaLimit(index)}
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          {t("Remove")}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    appendQuotaLimit({
+                      period: "daily",
+                      custom_seconds: 0,
+                      amount: 0,
+                    })
+                  }
+                >
+                  <Plus className="mr-1 h-4 w-4" />
+                  {t("Add Limit")}
+                </Button>
               </div>
             </SideDrawerSection>
 

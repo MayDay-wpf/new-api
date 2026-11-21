@@ -61,6 +61,11 @@ import {
   resetUserSubscriptionsByPlan,
 } from '../../api'
 import { formatTimestamp } from '../../lib'
+import {
+  formatQuotaLimitWindow,
+  getQuotaLimitUsage,
+  quotaLimitKey,
+} from '../../lib/format'
 import type { PlanRecord, UserSubscriptionRecord } from '../../types'
 
 interface Props {
@@ -339,9 +344,40 @@ export function UserSubscriptionsDialog(props: Props) {
                     const sub = record.subscription
                     const total = Number(sub.amount_total || 0)
                     const used = Number(sub.amount_used || 0)
-                    return total > 0
-                      ? `${formatQuota(used)}/${formatQuota(total)}`
-                      : t('Unlimited')
+                    const plan = plans.find(
+                      (item) => item.plan.id === sub.plan_id
+                    )?.plan
+                    const quotaLimits = plan?.quota_limits || []
+                    const now = Date.now() / 1000
+                    return (
+                      <div className='space-y-1 text-sm'>
+                        <div>
+                          {total > 0
+                            ? `${formatQuota(used)}/${formatQuota(total)}`
+                            : t('Unlimited')}
+                        </div>
+                        {quotaLimits.map((quotaLimit) => {
+                          const limitAmount = Number(quotaLimit.amount || 0)
+                          const limitUsed = getQuotaLimitUsage(
+                            quotaLimit,
+                            sub.quota_limit_usage,
+                            now
+                          )
+                          return (
+                            <div
+                              key={quotaLimitKey(quotaLimit)}
+                              className='text-muted-foreground text-xs'
+                            >
+                              {formatQuotaLimitWindow(quotaLimit, t)}:{' '}
+                              {formatQuota(limitUsed)}/
+                              {limitAmount > 0
+                                ? formatQuota(limitAmount)
+                                : t('Unlimited')}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
                   },
                 },
                 {

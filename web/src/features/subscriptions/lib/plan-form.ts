@@ -23,6 +23,14 @@ import { parseQuotaFromDollars, quotaUnitsToDollars } from "@/lib/format";
 
 import type { SubscriptionPlan, PlanPayload } from "../types";
 
+export const planQuotaLimitFormSchema = z.object({
+  period: z.enum(["daily", "weekly", "monthly", "custom"]),
+  custom_seconds: z.coerce.number().min(0),
+  amount: z.coerce.number().min(0),
+});
+
+export type PlanQuotaLimitFormValue = z.infer<typeof planQuotaLimitFormSchema>;
+
 export function getPlanFormSchema(t: TFunction) {
   return z.object({
     title: z.string().min(1, t("Please enter plan title")),
@@ -31,14 +39,41 @@ export function getPlanFormSchema(t: TFunction) {
     duration_unit: z.enum(["year", "month", "day", "hour", "custom"]),
     duration_value: z.coerce.number().min(1),
     custom_seconds: z.coerce.number().min(0).optional(),
-    quota_reset_period: z.enum([
-      "never",
-      "daily",
-      "weekly",
-      "monthly",
-      "custom",
-    ]),
-    quota_reset_custom_seconds: z.coerce.number().min(0).optional(),
+    quota_limits: z
+      .array(planQuotaLimitFormSchema)
+      .superRefine((limits, ctx) => {
+        const seen = new Set<string>();
+        limits.forEach((limit, index) => {
+          // Rows without an amount are dropped on submit, so they need no
+          // validation and must not trigger duplicate warnings.
+          if (Number(limit.amount || 0) <= 0) return;
+          if (limit.period === "custom") {
+            const seconds = Number(limit.custom_seconds || 0);
+            if (seconds <= 0) {
+              ctx.addIssue({
+                code: "custom",
+                path: [index, "custom_seconds"],
+                message: t(
+                  "Custom quota limit window must be greater than 0 seconds"
+                ),
+              });
+            }
+          }
+          const key =
+            limit.period === "custom"
+              ? `custom:${Number(limit.custom_seconds || 0)}`
+              : limit.period;
+          if (seen.has(key)) {
+            ctx.addIssue({
+              code: "custom",
+              path: [index, "period"],
+              message: t("Duplicate quota limit window"),
+            });
+            return;
+          }
+          seen.add(key);
+        });
+      }),
     enabled: z.boolean(),
     sort_order: z.coerce.number(),
     allow_balance_pay: z.boolean(),
@@ -63,8 +98,7 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   duration_unit: "month",
   duration_value: 1,
   custom_seconds: 0,
-  quota_reset_period: "never",
-  quota_reset_custom_seconds: 0,
+  quota_limits: [],
   enabled: true,
   sort_order: 0,
   allow_balance_pay: true,
@@ -79,6 +113,32 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   waffo_pancake_product_id: "",
 };
 
+// Legacy plans only carried one reset cycle; surface it as the first limit so
+// editing such a plan keeps its effective per-cycle quota.
+function planQuotaLimitsToFormValues(
+  plan: Partial<SubscriptionPlan>
+): PlanQuotaLimitFormValue[] {
+  const limits = plan.quota_limits || [];
+  if (limits.length > 0) {
+    return limits.map((limit) => ({
+      period: limit.period,
+      custom_seconds: Number(limit.custom_seconds || 0),
+      amount: quotaUnitsToDollars(Number(limit.amount || 0)),
+    }));
+  }
+  const legacyPeriod = plan.quota_reset_period;
+  if (legacyPeriod && legacyPeriod !== "never") {
+    return [
+      {
+        period: legacyPeriod,
+        custom_seconds: Number(plan.quota_reset_custom_seconds || 0),
+        amount: quotaUnitsToDollars(Number(plan.total_amount || 0)),
+      },
+    ];
+  }
+  return [];
+}
+
 export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
   return {
     title: plan.title || "",
@@ -87,8 +147,7 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
     duration_unit: plan.duration_unit || "month",
     duration_value: Number(plan.duration_value || 1),
     custom_seconds: Number(plan.custom_seconds || 0),
-    quota_reset_period: plan.quota_reset_period || "never",
-    quota_reset_custom_seconds: Number(plan.quota_reset_custom_seconds || 0),
+    quota_limits: planQuotaLimitsToFormValues(plan),
     enabled: plan.enabled !== false,
     sort_order: Number(plan.sort_order || 0),
     allow_balance_pay: plan.allow_balance_pay !== false,
@@ -105,6 +164,18 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
 }
 
 export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
+  const quotaLimits = (values.quota_limits || [])
+    .filter(
+      (limit) =>
+        Number(limit.amount || 0) > 0 &&
+        (limit.period !== "custom" || Number(limit.custom_seconds || 0) > 0)
+    )
+    .map((limit) => ({
+      period: limit.period,
+      custom_seconds:
+        limit.period === "custom" ? Number(limit.custom_seconds || 0) : 0,
+      amount: parseQuotaFromDollars(Number(limit.amount || 0)),
+    }));
   return {
     plan: {
       ...values,
@@ -112,11 +183,10 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
       currency: "USD",
       duration_value: Number(values.duration_value || 0),
       custom_seconds: Number(values.custom_seconds || 0),
-      quota_reset_period: values.quota_reset_period || "never",
-      quota_reset_custom_seconds:
-        values.quota_reset_period === "custom"
-          ? Number(values.quota_reset_custom_seconds || 0)
-          : 0,
+      quota_limits: quotaLimits,
+      // Independent windows replace the legacy single reset cycle.
+      quota_reset_period: "never",
+      quota_reset_custom_seconds: 0,
       sort_order: Number(values.sort_order || 0),
       max_purchase_per_user: Number(values.max_purchase_per_user || 0),
       stock_total: Number(values.stock_total || 0),

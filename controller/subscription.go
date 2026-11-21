@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -141,6 +142,40 @@ func AdminListSubscriptionPlans(c *gin.Context) {
 	common.ApiSuccess(c, result)
 }
 
+// normalizePlanQuotaLimits validates the plan's independent quota windows.
+// When at least one window is configured the legacy single reset cycle is
+// disabled so the two mechanisms never reset each other.
+func normalizePlanQuotaLimits(c *gin.Context, plan *model.SubscriptionPlan) bool {
+	limits, err := model.NormalizeQuotaLimits(plan.QuotaLimits)
+	if err != nil {
+		switch err.Error() {
+		case "invalid quota limit period":
+			common.ApiErrorT(c, "Invalid quota limit window")
+		case "custom quota limit window must be greater than 0 seconds":
+			common.ApiErrorT(c, "Custom quota limit window must be greater than 0 seconds")
+		case "quota limit amount cannot be negative":
+			common.ApiErrorT(c, "Quota limit amount cannot be negative")
+		case "duplicate quota limit window":
+			common.ApiErrorT(c, "Duplicate quota limit window")
+		default:
+			common.ApiError(c, err)
+		}
+		return false
+	}
+	plan.QuotaLimits = limits
+	if len(limits) > 0 {
+		plan.QuotaResetPeriod = model.SubscriptionResetNever
+		plan.QuotaResetCustomSeconds = 0
+		return true
+	}
+	plan.QuotaResetPeriod = model.NormalizeResetPeriod(plan.QuotaResetPeriod)
+	if plan.QuotaResetPeriod == model.SubscriptionResetCustom && plan.QuotaResetCustomSeconds <= 0 {
+		common.ApiErrorT(c, "Custom reset cycle must be greater than 0 seconds")
+		return false
+	}
+	return true
+}
+
 type AdminUpsertSubscriptionPlanRequest struct {
 	Plan model.SubscriptionPlan `json:"plan"`
 }
@@ -210,9 +245,7 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
-	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
-	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
-		common.ApiErrorT(c, "Custom reset cycle must be greater than 0 seconds")
+	if !normalizePlanQuotaLimits(c, &req.Plan) {
 		return
 	}
 	err := model.DB.Create(&req.Plan).Error
@@ -288,13 +321,17 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			return
 		}
 	}
-	req.Plan.QuotaResetPeriod = model.NormalizeResetPeriod(req.Plan.QuotaResetPeriod)
-	if req.Plan.QuotaResetPeriod == model.SubscriptionResetCustom && req.Plan.QuotaResetCustomSeconds <= 0 {
-		common.ApiErrorT(c, "Custom reset cycle must be greater than 0 seconds")
+	if !normalizePlanQuotaLimits(c, &req.Plan) {
 		return
 	}
 
-	err := model.DB.Transaction(func(tx *gorm.DB) error {
+	quotaLimitsJSON, err := json.Marshal(req.Plan.QuotaLimits)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
 		// update plan (allow zero values updates with map)
 		updateMap := map[string]any{
 			"title":                      req.Plan.Title,
@@ -316,6 +353,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"downgrade_group":            req.Plan.DowngradeGroup,
 			"quota_reset_period":         req.Plan.QuotaResetPeriod,
 			"quota_reset_custom_seconds": req.Plan.QuotaResetCustomSeconds,
+			"quota_limits":               string(quotaLimitsJSON),
 			"updated_at":                 common.GetTimestamp(),
 		}
 		if req.Plan.AllowBalancePay != nil {

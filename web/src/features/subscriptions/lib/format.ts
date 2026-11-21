@@ -20,7 +20,11 @@ import type { TFunction } from 'i18next'
 
 import dayjs from '@/lib/dayjs'
 
-import type { SubscriptionPlan } from '../types'
+import type {
+  PlanQuotaLimit,
+  QuotaLimitUsage,
+  SubscriptionPlan,
+} from '../types'
 
 export function formatDuration(
   plan: Partial<SubscriptionPlan>,
@@ -65,4 +69,58 @@ export function formatResetPeriod(
 export function formatTimestamp(ts: number): string {
   if (!ts) return '-'
   return dayjs(ts * 1000).format('YYYY-MM-DD HH:mm:ss')
+}
+
+// ============================================================================
+// Independent quota windows
+// ============================================================================
+
+export function formatQuotaLimitWindow(
+  limit: Partial<PlanQuotaLimit>,
+  t: TFunction
+): string {
+  const period = limit?.period || 'daily'
+  if (period === 'daily') return t('Daily')
+  if (period === 'weekly') return t('Weekly')
+  if (period === 'monthly') return t('Monthly')
+  const seconds = Number(limit?.custom_seconds || 0)
+  if (seconds >= 86400) return `${Math.floor(seconds / 86400)} ${t('days')}`
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)} ${t('hours')}`
+  if (seconds >= 60) return `${Math.floor(seconds / 60)} ${t('minutes')}`
+  return `${seconds} ${t('seconds')}`
+}
+
+export function quotaLimitKey(limit: Partial<PlanQuotaLimit>): string {
+  if (limit?.period === 'custom') {
+    return `custom:${Number(limit.custom_seconds || 0)}`
+  }
+  return limit?.period || ''
+}
+
+// getQuotaLimitUsage returns the usage of the window containing now. Stored
+// usage from a previous window is treated as zero until the backend refreshes
+// it.
+export function getQuotaLimitUsage(
+  limit: Partial<PlanQuotaLimit>,
+  usages: QuotaLimitUsage[] | undefined,
+  nowSeconds: number = Date.now() / 1000
+): number {
+  const key = quotaLimitKey(limit)
+  const usage = (usages || []).find((item) => item.key === key)
+  if (!usage) return 0
+  if (usage.window_end > 0 && usage.window_end <= nowSeconds) return 0
+  return Number(usage.used || 0)
+}
+
+// getQuotaLimitResetTime returns the end of the current window, or 0 when the
+// stored window already elapsed (the backend will roll it over on next use).
+export function getQuotaLimitResetTime(
+  limit: Partial<PlanQuotaLimit>,
+  usages: QuotaLimitUsage[] | undefined,
+  nowSeconds: number = Date.now() / 1000
+): number {
+  const key = quotaLimitKey(limit)
+  const usage = (usages || []).find((item) => item.key === key)
+  if (!usage || usage.window_end <= nowSeconds) return 0
+  return Number(usage.window_end || 0)
 }

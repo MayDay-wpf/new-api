@@ -1,6 +1,8 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -154,6 +156,306 @@ func PurgeSubscriptionPlanCache() error {
 	return getSubscriptionPlanInfoCache().Purge()
 }
 
+// SubscriptionPlanQuotaLimit is one independent quota window of a plan.
+// A plan may carry several limits at the same time (for example a 5-hour
+// window, a weekly window and a monthly window); every window is enforced on
+// top of the plan's overall TotalAmount.
+type SubscriptionPlanQuotaLimit struct {
+	// Period is daily / weekly / monthly / custom.
+	Period string `json:"period"`
+	// CustomSeconds is the window length when Period is custom (18000 = 5h).
+	CustomSeconds int64 `json:"custom_seconds"`
+	// Amount is the max quota units usable inside one window (0 = no limit).
+	Amount int64 `json:"amount"`
+}
+
+type SubscriptionPlanQuotaLimits []SubscriptionPlanQuotaLimit
+
+func (l SubscriptionPlanQuotaLimits) Value() (driver.Value, error) {
+	if len(l) == 0 {
+		return "[]", nil
+	}
+	data, err := json.Marshal(l)
+	if err != nil {
+		return nil, err
+	}
+	return string(data), nil
+}
+
+func (l *SubscriptionPlanQuotaLimits) Scan(value any) error {
+	*l = nil
+	raw, err := quotaLimitJSONBytes(value)
+	if err != nil || len(raw) == 0 {
+		return err
+	}
+	var parsed SubscriptionPlanQuotaLimits
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	*l = parsed
+	return nil
+}
+
+// SubscriptionQuotaLimitUsage tracks how much quota one subscription used
+// inside the current window of a plan limit.
+type SubscriptionQuotaLimitUsage struct {
+	Key         string `json:"key"`
+	Used        int64  `json:"used"`
+	WindowStart int64  `json:"window_start"`
+	WindowEnd   int64  `json:"window_end"`
+}
+
+type SubscriptionQuotaLimitUsages []SubscriptionQuotaLimitUsage
+
+func (u SubscriptionQuotaLimitUsages) Value() (driver.Value, error) {
+	if len(u) == 0 {
+		return "[]", nil
+	}
+	data, err := json.Marshal(u)
+	if err != nil {
+		return nil, err
+	}
+	return string(data), nil
+}
+
+func (u *SubscriptionQuotaLimitUsages) Scan(value any) error {
+	*u = nil
+	raw, err := quotaLimitJSONBytes(value)
+	if err != nil || len(raw) == 0 {
+		return err
+	}
+	var parsed SubscriptionQuotaLimitUsages
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return err
+	}
+	*u = parsed
+	return nil
+}
+
+func quotaLimitJSONBytes(value any) ([]byte, error) {
+	switch v := value.(type) {
+	case nil:
+		return nil, nil
+	case []byte:
+		return v, nil
+	case string:
+		return []byte(v), nil
+	default:
+		return nil, fmt.Errorf("unsupported quota limit JSON value type %T", value)
+	}
+}
+
+// NormalizeQuotaLimitPeriod maps a stored period to its canonical value.
+func NormalizeQuotaLimitPeriod(period string) string {
+	switch strings.ToLower(strings.TrimSpace(period)) {
+	case SubscriptionResetDaily, SubscriptionResetWeekly, SubscriptionResetMonthly:
+		return strings.ToLower(strings.TrimSpace(period))
+	case SubscriptionResetCustom:
+		return SubscriptionResetCustom
+	default:
+		return ""
+	}
+}
+
+// Key identifies a limit independently from its amount, so editing the amount
+// keeps the usage counter of the same window.
+func (l SubscriptionPlanQuotaLimit) Key() string {
+	period := NormalizeQuotaLimitPeriod(l.Period)
+	if period == SubscriptionResetCustom {
+		return fmt.Sprintf("%s:%d", SubscriptionResetCustom, l.CustomSeconds)
+	}
+	return period
+}
+
+// NormalizeQuotaLimits validates and canonicalizes user supplied limits.
+func NormalizeQuotaLimits(limits SubscriptionPlanQuotaLimits) (SubscriptionPlanQuotaLimits, error) {
+	result := make(SubscriptionPlanQuotaLimits, 0, len(limits))
+	seen := make(map[string]struct{}, len(limits))
+	for _, limit := range limits {
+		period := NormalizeQuotaLimitPeriod(limit.Period)
+		if period == "" {
+			return nil, errors.New("invalid quota limit period")
+		}
+		limit.Period = period
+		if period == SubscriptionResetCustom {
+			if limit.CustomSeconds <= 0 {
+				return nil, errors.New("custom quota limit window must be greater than 0 seconds")
+			}
+		} else {
+			limit.CustomSeconds = 0
+		}
+		if limit.Amount < 0 {
+			return nil, errors.New("quota limit amount cannot be negative")
+		}
+		if limit.Amount == 0 {
+			// An empty limit means "no limit for this window".
+			continue
+		}
+		key := limit.Key()
+		if _, ok := seen[key]; ok {
+			return nil, errors.New("duplicate quota limit window")
+		}
+		seen[key] = struct{}{}
+		result = append(result, limit)
+	}
+	return result, nil
+}
+
+// normalizeQuotaLimitsLenient drops invalid entries instead of failing, so a
+// stale cached plan can still be served.
+func normalizeQuotaLimitsLenient(limits SubscriptionPlanQuotaLimits) SubscriptionPlanQuotaLimits {
+	result := make(SubscriptionPlanQuotaLimits, 0, len(limits))
+	seen := make(map[string]struct{}, len(limits))
+	for _, limit := range limits {
+		period := NormalizeQuotaLimitPeriod(limit.Period)
+		if period == "" || limit.Amount <= 0 {
+			continue
+		}
+		limit.Period = period
+		if period == SubscriptionResetCustom {
+			if limit.CustomSeconds <= 0 {
+				continue
+			}
+		} else {
+			limit.CustomSeconds = 0
+		}
+		key := limit.Key()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, limit)
+	}
+	return result
+}
+
+// quotaLimitWindow returns the [start, end) unix range of the window that
+// contains now. Calendar windows align to the natural boundary; custom windows
+// tumble from the subscription start.
+func quotaLimitWindow(limit SubscriptionPlanQuotaLimit, anchor time.Time, now time.Time) (int64, int64) {
+	switch NormalizeQuotaLimitPeriod(limit.Period) {
+	case SubscriptionResetDaily:
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		return start.Unix(), start.AddDate(0, 0, 1).Unix()
+	case SubscriptionResetWeekly:
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).
+			AddDate(0, 0, -(weekday - 1))
+		return start.Unix(), start.AddDate(0, 0, 7).Unix()
+	case SubscriptionResetMonthly:
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		return start.Unix(), start.AddDate(0, 1, 0).Unix()
+	case SubscriptionResetCustom:
+		window := limit.CustomSeconds
+		if window <= 0 {
+			window = 86400
+		}
+		anchorUnix := anchor.Unix()
+		elapsed := now.Unix() - anchorUnix
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		start := anchorUnix + (elapsed/window)*window
+		return start, start + window
+	default:
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		return start.Unix(), start.AddDate(0, 0, 1).Unix()
+	}
+}
+
+// refreshQuotaLimitUsages rebuilds the usage list so it matches the plan's
+// current limits and the windows containing now. Expired windows restart at
+// zero; the returned bool reports whether the persisted value changed.
+func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now time.Time) (SubscriptionQuotaLimitUsages, bool) {
+	if sub == nil || plan == nil {
+		return nil, false
+	}
+	limits := normalizeQuotaLimitsLenient(plan.QuotaLimits)
+	existing := make(map[string]SubscriptionQuotaLimitUsage, len(sub.QuotaLimitUsage))
+	for _, usage := range sub.QuotaLimitUsage {
+		existing[usage.Key] = usage
+	}
+	anchor := time.Unix(sub.StartTime, 0)
+	result := make(SubscriptionQuotaLimitUsages, 0, len(limits))
+	changed := len(sub.QuotaLimitUsage) != len(limits)
+	for _, limit := range limits {
+		key := limit.Key()
+		start, end := quotaLimitWindow(limit, anchor, now)
+		usage, ok := existing[key]
+		if !ok || usage.WindowStart != start {
+			usage = SubscriptionQuotaLimitUsage{Key: key, WindowStart: start, WindowEnd: end}
+			changed = true
+		} else if usage.WindowEnd != end {
+			usage.WindowEnd = end
+			changed = true
+		}
+		result = append(result, usage)
+	}
+	if !changed {
+		for i := range result {
+			if result[i] != sub.QuotaLimitUsage[i] {
+				changed = true
+				break
+			}
+		}
+	}
+	return result, changed
+}
+
+func applyQuotaLimitUsage(usages SubscriptionQuotaLimitUsages, delta int64) {
+	if delta == 0 {
+		return
+	}
+	for i := range usages {
+		used := usages[i].Used + delta
+		if used < 0 {
+			used = 0
+		}
+		usages[i].Used = used
+	}
+}
+
+// QuotaLimitWindowLabel renders a short human readable window name for logs
+// and user facing quota errors (for example "5h" or "weekly").
+func QuotaLimitWindowLabel(limit SubscriptionPlanQuotaLimit) string {
+	switch NormalizeQuotaLimitPeriod(limit.Period) {
+	case SubscriptionResetDaily:
+		return "daily"
+	case SubscriptionResetWeekly:
+		return "weekly"
+	case SubscriptionResetMonthly:
+		return "monthly"
+	case SubscriptionResetCustom:
+		seconds := limit.CustomSeconds
+		switch {
+		case seconds > 0 && seconds%3600 == 0:
+			return fmt.Sprintf("%dh", seconds/3600)
+		case seconds > 0 && seconds%60 == 0:
+			return fmt.Sprintf("%dm", seconds/60)
+		default:
+			return fmt.Sprintf("%ds", seconds)
+		}
+	default:
+		return "limit"
+	}
+}
+
+// quotaLimitsInsufficient reports whether amount cannot fit in every window.
+func quotaLimitsInsufficient(limits SubscriptionPlanQuotaLimits, usages SubscriptionQuotaLimitUsages, amount int64) (bool, string) {
+	for i, limit := range limits {
+		if limit.Amount <= 0 || i >= len(usages) {
+			continue
+		}
+		if usages[i].Used+amount > limit.Amount {
+			return true, QuotaLimitWindowLabel(limit)
+		}
+	}
+	return false, ""
+}
+
 // Subscription plan
 type SubscriptionPlan struct {
 	Id int `json:"id"`
@@ -199,9 +501,14 @@ type SubscriptionPlan struct {
 	// Total quota (amount in quota units, 0 = unlimited)
 	TotalAmount int64 `json:"total_amount" gorm:"type:bigint;not null;default:0"`
 
-	// Quota reset period for plan
+	// Quota reset period for plan (legacy single reset cycle)
 	QuotaResetPeriod        string `json:"quota_reset_period" gorm:"type:varchar(16);default:'never'"`
 	QuotaResetCustomSeconds int64  `json:"quota_reset_custom_seconds" gorm:"type:bigint;default:0"`
+
+	// Independent quota windows enforced at the same time (e.g. 5h + weekly +
+	// monthly). Each entry resets on its own window while TotalAmount remains
+	// the lifetime cap.
+	QuotaLimits SubscriptionPlanQuotaLimits `json:"quota_limits" gorm:"type:text"`
 
 	CreatedAt int64 `json:"created_at" gorm:"bigint"`
 	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
@@ -367,6 +674,7 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	if p.AllowWalletOverflow == nil {
 		p.AllowWalletOverflow = common.GetPointer(true)
 	}
+	p.QuotaLimits = normalizeQuotaLimitsLenient(p.QuotaLimits)
 }
 
 // Subscription order (payment -> webhook -> create UserSubscription)
@@ -425,6 +733,10 @@ type UserSubscription struct {
 
 	LastResetTime int64 `json:"last_reset_time" gorm:"type:bigint;default:0"`
 	NextResetTime int64 `json:"next_reset_time" gorm:"type:bigint;default:0;index"`
+
+	// Per-window usage of the plan's independent quota limits. Windows reset
+	// independently and never touch AmountUsed.
+	QuotaLimitUsage SubscriptionQuotaLimitUsages `json:"quota_limit_usage" gorm:"type:text"`
 
 	UpgradeGroup  string `json:"upgrade_group" gorm:"type:varchar(64);default:''"`
 	PrevUserGroup string `json:"prev_user_group" gorm:"type:varchar(64);default:''"`
@@ -569,17 +881,27 @@ func getSubscriptionPlanByIdTx(tx *gorm.DB, id int) (*SubscriptionPlan, error) {
 	return &plan, nil
 }
 
-func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
-	if userId <= 0 || planId <= 0 {
-		return 0, errors.New("invalid userId or planId")
+// countActiveUserSubscriptionsByPlan counts the subscriptions that still occupy
+// a purchase-limit slot: active and not yet ended. Expired or cancelled
+// subscriptions release their slot so the user can buy the plan again.
+func countActiveUserSubscriptionsByPlan(db *gorm.DB, userId int, planId int, now int64) (int64, error) {
+	if db == nil {
+		db = DB
 	}
 	var count int64
-	if err := DB.Model(&UserSubscription{}).
-		Where("user_id = ? AND plan_id = ?", userId, planId).
+	if err := db.Model(&UserSubscription{}).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, planId, "active", now).
 		Count(&count).Error; err != nil {
 		return 0, err
 	}
 	return count, nil
+}
+
+func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
+	if userId <= 0 || planId <= 0 {
+		return 0, errors.New("invalid userId or planId")
+	}
+	return countActiveUserSubscriptionsByPlan(DB, userId, planId, GetDBTimestamp())
 }
 
 func getUserGroupByIdTx(tx *gorm.DB, userId int) (string, error) {
@@ -650,19 +972,17 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	if userId <= 0 {
 		return nil, errors.New("invalid user id")
 	}
+	nowUnix := GetDBTimestamp()
+	now := time.Unix(nowUnix, 0)
 	if plan.MaxPurchasePerUser > 0 {
-		var count int64
-		if err := tx.Model(&UserSubscription{}).
-			Where("user_id = ? AND plan_id = ?", userId, plan.Id).
-			Count(&count).Error; err != nil {
+		count, err := countActiveUserSubscriptionsByPlan(tx, userId, plan.Id, nowUnix)
+		if err != nil {
 			return nil, err
 		}
 		if count >= int64(plan.MaxPurchasePerUser) {
 			return nil, common.NewMessage("Purchase limit for this plan has been reached")
 		}
 	}
-	nowUnix := GetDBTimestamp()
-	now := time.Unix(nowUnix, 0)
 	endUnix, err := calcPlanEndTime(now, plan)
 	if err != nil {
 		return nil, err
@@ -709,6 +1029,9 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		AllowWalletOverflow: allowWalletOverflow,
 		CreatedAt:           common.GetTimestamp(),
 		UpdatedAt:           common.GetTimestamp(),
+	}
+	if usages, _ := refreshQuotaLimitUsages(sub, plan, now); len(usages) > 0 {
+		sub.QuotaLimitUsage = usages
 	}
 	if err := tx.Create(sub).Error; err != nil {
 		return nil, err
@@ -1093,9 +1416,25 @@ func buildSubscriptionSummaries(subs []UserSubscription) []SubscriptionSummary {
 	if len(subs) == 0 {
 		return []SubscriptionSummary{}
 	}
+	now := time.Now()
+	plans := make(map[int]*SubscriptionPlan, 2)
 	result := make([]SubscriptionSummary, 0, len(subs))
 	for _, sub := range subs {
 		subCopy := sub
+		plan, ok := plans[subCopy.PlanId]
+		if !ok {
+			if loaded, err := GetSubscriptionPlanById(subCopy.PlanId); err == nil {
+				plan = loaded
+			}
+			plans[subCopy.PlanId] = plan
+		}
+		if plan != nil {
+			if usages, _ := refreshQuotaLimitUsages(&subCopy, plan, now); len(usages) > 0 {
+				subCopy.QuotaLimitUsage = usages
+			} else {
+				subCopy.QuotaLimitUsage = nil
+			}
+		}
 		result = append(result, SubscriptionSummary{
 			Subscription: &subCopy,
 		})
@@ -1194,6 +1533,14 @@ func resetUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *Subscript
 		return errors.New("invalid reset args")
 	}
 	sub.AmountUsed = 0
+	if usages, _ := refreshQuotaLimitUsages(sub, plan, time.Unix(now, 0)); len(usages) > 0 {
+		for i := range usages {
+			usages[i].Used = 0
+		}
+		sub.QuotaLimitUsage = usages
+	} else {
+		sub.QuotaLimitUsage = nil
+	}
 	if advanceResetTime {
 		nextReset := calcNextResetTime(time.Unix(now, 0), plan, sub.EndTime)
 		sub.NextResetTime = nextReset
@@ -1442,11 +1789,21 @@ func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, pl
 	if tx == nil || sub == nil || plan == nil {
 		return errors.New("invalid reset args")
 	}
+	usages, usageChanged := refreshQuotaLimitUsages(sub, plan, time.Unix(now, 0))
+	if usageChanged {
+		sub.QuotaLimitUsage = usages
+	}
+	saveUsageIfChanged := func() error {
+		if !usageChanged {
+			return nil
+		}
+		return tx.Save(sub).Error
+	}
 	if sub.NextResetTime > 0 && sub.NextResetTime > now {
-		return nil
+		return saveUsageIfChanged()
 	}
 	if NormalizeResetPeriod(plan.QuotaResetPeriod) == SubscriptionResetNever {
-		return nil
+		return saveUsageIfChanged()
 	}
 	baseUnix := sub.LastResetTime
 	if baseUnix <= 0 {
@@ -1466,7 +1823,7 @@ func maybeResetUserSubscriptionWithPlanTx(tx *gorm.DB, sub *UserSubscription, pl
 			sub.LastResetTime = base.Unix()
 			return tx.Save(sub).Error
 		}
-		return nil
+		return saveUsageIfChanged()
 	}
 	sub.AmountUsed = 0
 	sub.LastResetTime = base.Unix()
@@ -1521,6 +1878,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 		if len(subs) == 0 {
 			return errors.New("no active subscription")
 		}
+		lastLimitReason := ""
 		for _, candidate := range subs {
 			sub := candidate
 			plan, err := getSubscriptionPlanByIdTx(tx, sub.PlanId)
@@ -1529,6 +1887,15 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			}
 			if err := maybeResetUserSubscriptionWithPlanTx(tx, &sub, plan, now); err != nil {
 				return err
+			}
+			limits := normalizeQuotaLimitsLenient(plan.QuotaLimits)
+			if len(limits) > 0 {
+				usages, _ := refreshQuotaLimitUsages(&sub, plan, time.Unix(now, 0))
+				sub.QuotaLimitUsage = usages
+				if blocked, limitKey := quotaLimitsInsufficient(limits, usages, amount); blocked {
+					lastLimitReason = limitKey
+					continue
+				}
 			}
 			usedBefore := sub.AmountUsed
 			if sub.AmountTotal > 0 {
@@ -1560,6 +1927,7 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 				return err
 			}
 			sub.AmountUsed += amount
+			applyQuotaLimitUsage(sub.QuotaLimitUsage, amount)
 			if err := tx.Save(&sub).Error; err != nil {
 				return err
 			}
@@ -1569,6 +1937,9 @@ func PreConsumeUserSubscription(requestId string, userId int, modelName string, 
 			returnValue.AmountUsedBefore = usedBefore
 			returnValue.AmountUsedAfter = sub.AmountUsed
 			return nil
+		}
+		if lastLimitReason != "" {
+			return fmt.Errorf("subscription quota insufficient, need=%d (limit %s reached)", amount, lastLimitReason)
 		}
 		return fmt.Errorf("subscription quota insufficient, need=%d", amount)
 	})
@@ -1694,6 +2065,7 @@ func PostConsumeUserSubscriptionDelta(userSubscriptionId int, delta int64) error
 	if delta == 0 {
 		return nil
 	}
+	now := time.Unix(common.GetTimestamp(), 0)
 	return DB.Transaction(func(tx *gorm.DB) error {
 		var sub UserSubscription
 		if err := lockForUpdate(tx).
@@ -1706,6 +2078,11 @@ func PostConsumeUserSubscriptionDelta(userSubscriptionId int, delta int64) error
 			return fmt.Errorf("subscription used exceeds total, used=%d total=%d", newUsed, sub.AmountTotal)
 		}
 		sub.AmountUsed = newUsed
+		if plan, err := getSubscriptionPlanByIdTx(tx, sub.PlanId); err == nil && plan != nil {
+			usages, _ := refreshQuotaLimitUsages(&sub, plan, now)
+			applyQuotaLimitUsage(usages, delta)
+			sub.QuotaLimitUsage = usages
+		}
 		return tx.Save(&sub).Error
 	})
 }

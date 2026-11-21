@@ -22,6 +22,23 @@ import { z } from "zod";
 // Subscription Plan Schema & Types
 // ============================================================================
 
+export const planQuotaLimitSchema = z.object({
+  period: z.enum(["daily", "weekly", "monthly", "custom"]),
+  custom_seconds: z.number().optional().default(0),
+  amount: z.number(),
+});
+
+export type PlanQuotaLimit = z.infer<typeof planQuotaLimitSchema>;
+
+export const quotaLimitUsageSchema = z.object({
+  key: z.string(),
+  used: z.number(),
+  window_start: z.number(),
+  window_end: z.number(),
+});
+
+export type QuotaLimitUsage = z.infer<typeof quotaLimitUsageSchema>;
+
 export const subscriptionPlanSchema = z.object({
   id: z.number(),
   title: z.string(),
@@ -33,6 +50,7 @@ export const subscriptionPlanSchema = z.object({
   custom_seconds: z.number().optional(),
   quota_reset_period: z.enum(["never", "daily", "weekly", "monthly", "custom"]),
   quota_reset_custom_seconds: z.number().optional(),
+  quota_limits: z.array(planQuotaLimitSchema).optional(),
   enabled: z.boolean(),
   sort_order: z.number(),
   allow_balance_pay: z.boolean().optional().default(true),
@@ -69,6 +87,7 @@ export const userSubscriptionSchema = z.object({
   amount_total: z.number(),
   amount_used: z.number(),
   next_reset_time: z.number().optional(),
+  quota_limit_usage: z.array(quotaLimitUsageSchema).optional(),
 });
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>;

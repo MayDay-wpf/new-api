@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Crown, RefreshCw, Sparkles, Check } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -53,7 +53,11 @@ import {
 import { SubscriptionPurchaseDialog } from "@/features/subscriptions/components/dialogs/subscription-purchase-dialog";
 import {
   formatDuration,
+  formatQuotaLimitWindow,
   formatResetPeriod,
+  getQuotaLimitResetTime,
+  getQuotaLimitUsage,
+  quotaLimitKey,
 } from "@/features/subscriptions/lib";
 import type {
   PlanRecord,
@@ -71,6 +75,8 @@ interface SubscriptionPlansCardProps {
   onAvailabilityChange?: (available: boolean) => void;
   userQuota?: number;
   onPurchaseSuccess?: () => void | Promise<void>;
+  /** Bump to silently reload plans and subscriptions (e.g. after redemption). */
+  refreshKey?: number;
 }
 
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
@@ -102,6 +108,7 @@ export function SubscriptionPlansCard({
   onAvailabilityChange,
   userQuota,
   onPurchaseSuccess,
+  refreshKey,
 }: SubscriptionPlansCardProps) {
   const { t } = useTranslation();
 
@@ -165,6 +172,16 @@ export function SubscriptionPlansCard({
     init();
   }, [fetchPlans, fetchSelfSubscription]);
 
+  // Silent reload after an external change (e.g. redeeming a subscription
+  // code): no skeleton, just refresh the plans and the current subscriptions.
+  const appliedRefreshKeyRef = useRef(refreshKey);
+  useEffect(() => {
+    if (appliedRefreshKeyRef.current === refreshKey) return;
+    appliedRefreshKeyRef.current = refreshKey;
+    if (!refreshKey) return;
+    void Promise.all([fetchPlans(), fetchSelfSubscription()]);
+  }, [refreshKey, fetchPlans, fetchSelfSubscription]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -203,9 +220,19 @@ export function SubscriptionPlansCard({
 
   const planPurchaseCountMap = useMemo(() => {
     const map = new Map<number, number>();
+    const now = Date.now() / 1000;
     for (const sub of allSubscriptions) {
-      const planId = sub?.subscription?.plan_id;
+      const subscription = sub?.subscription;
+      const planId = subscription?.plan_id;
       if (!planId) continue;
+      // Only active, unexpired subscriptions occupy a purchase-limit slot;
+      // expired or cancelled ones must not block a new purchase.
+      if (
+        subscription?.status !== "active" ||
+        (subscription?.end_time || 0) <= now
+      ) {
+        continue;
+      }
       map.set(planId, (map.get(planId) || 0) + 1);
     }
     return map;
@@ -220,6 +247,16 @@ export function SubscriptionPlansCard({
     for (const p of plans) {
       if (p?.plan?.id) {
         map.set(p.plan.id, p.plan.title || "");
+      }
+    }
+    return map;
+  }, [plans]);
+
+  const planMap = useMemo(() => {
+    const map = new Map<number, PlanRecord["plan"]>();
+    for (const p of plans) {
+      if (p?.plan?.id) {
+        map.set(p.plan.id, p.plan);
       }
     }
     return map;
@@ -417,6 +454,8 @@ export function SubscriptionPlansCard({
                   const isActive =
                     subscription?.status === "active" && !isExpired;
                   const nextResetTime = subscription?.next_reset_time ?? 0;
+                  const planQuotaLimits =
+                    planMap.get(subscription?.plan_id || 0)?.quota_limits || [];
                   let statusBadge = (
                     <StatusBadge
                       label={t("Expired")}
@@ -477,39 +516,101 @@ export function SubscriptionPlansCard({
                           (subscription?.end_time || 0) * 1000,
                         ).toLocaleString()}
                       </div>
-                      {isActive && nextResetTime > 0 && (
-                        <div className="text-muted-foreground mt-1">
-                          {t("Next reset")}:{" "}
-                          {new Date(nextResetTime * 1000).toLocaleString()}
-                        </div>
+                      {isActive &&
+                        planQuotaLimits.length === 0 &&
+                        nextResetTime > 0 && (
+                          <div className="text-muted-foreground mt-1">
+                            {t("Next reset")}:{" "}
+                            {new Date(nextResetTime * 1000).toLocaleString()}
+                          </div>
+                        )}
+                      {planQuotaLimits.length === 0 && (
+                        <>
+                          <div className="text-muted-foreground mt-1">
+                            {t("Total Quota")}:{" "}
+                            {totalAmount > 0 ? (
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={<span className="cursor-help" />}
+                                >
+                                  {formatQuota(usedAmount)}/
+                                  {formatQuota(totalAmount)} · {t("Remaining")}{" "}
+                                  {formatQuota(remainAmount)}
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {t("Raw Quota")}: {usedAmount}/{totalAmount} ·{" "}
+                                  {t("Remaining")} {remainAmount}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              t("Unlimited")
+                            )}
+                            {totalAmount > 0 && (
+                              <span className="ml-2">
+                                {t("Used")} {usagePercent}%
+                              </span>
+                            )}
+                          </div>
+                          {totalAmount > 0 && isActive && (
+                            <Progress
+                              value={usagePercent}
+                              className="mt-2 h-1.5"
+                            />
+                          )}
+                        </>
                       )}
-                      <div className="text-muted-foreground mt-1">
-                        {t("Total Quota")}:{" "}
-                        {totalAmount > 0 ? (
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={<span className="cursor-help" />}
-                            >
-                              {formatQuota(usedAmount)}/
-                              {formatQuota(totalAmount)} · {t("Remaining")}{" "}
-                              {formatQuota(remainAmount)}
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {t("Raw Quota")}: {usedAmount}/{totalAmount} ·{" "}
-                              {t("Remaining")} {remainAmount}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          t("Unlimited")
-                        )}
-                        {totalAmount > 0 && (
-                          <span className="ml-2">
-                            {t("Used")} {usagePercent}%
-                          </span>
-                        )}
-                      </div>
-                      {totalAmount > 0 && isActive && (
-                        <Progress value={usagePercent} className="mt-2 h-1.5" />
+                      {isActive && planQuotaLimits.length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {planQuotaLimits.map((limit) => {
+                            const limitAmount = Number(limit.amount || 0);
+                            const limitUsed = getQuotaLimitUsage(
+                              limit,
+                              subscription?.quota_limit_usage,
+                              now,
+                            );
+                            const limitResetTime = getQuotaLimitResetTime(
+                              limit,
+                              subscription?.quota_limit_usage,
+                              now,
+                            );
+                            const limitPercent =
+                              limitAmount > 0
+                                ? Math.min(
+                                    100,
+                                    Math.round((limitUsed / limitAmount) * 100),
+                                  )
+                                : 0;
+                            return (
+                              <div key={quotaLimitKey(limit)}>
+                                <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
+                                  <span>
+                                    {formatQuotaLimitWindow(limit, t)}
+                                  </span>
+                                  <span>
+                                    {formatQuota(limitUsed)}/
+                                    {limitAmount > 0
+                                      ? formatQuota(limitAmount)
+                                      : t("Unlimited")}
+                                  </span>
+                                </div>
+                                {limitResetTime > 0 && (
+                                  <div className="text-muted-foreground text-[11px] opacity-80">
+                                    {t("Next reset")}:{" "}
+                                    {new Date(
+                                      limitResetTime * 1000,
+                                    ).toLocaleString()}
+                                  </div>
+                                )}
+                                {limitAmount > 0 && (
+                                  <Progress
+                                    value={limitPercent}
+                                    className="mt-1 h-1"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       )}
                     </div>
                   );
@@ -544,8 +645,18 @@ export function SubscriptionPlansCard({
               );
               const soldOut = stockTotal > 0 && stockRemaining <= 0;
 
+              const planQuotaLimits = plan.quota_limits || [];
               const benefits = [
                 `${t("Validity Period")}: ${formatDuration(plan, t)}`,
+                ...planQuotaLimits.map(
+                  (quotaLimit) =>
+                    `${t("Quota Limit")}: ${formatQuotaLimitWindow(quotaLimit, t)} · ${
+                      Number(quotaLimit.amount || 0) > 0
+                        ? formatQuota(Number(quotaLimit.amount || 0))
+                        : t("Unlimited")
+                    }`,
+                ),
+                planQuotaLimits.length === 0 &&
                 formatResetPeriod(plan, t) !== t("No Reset")
                   ? `${t("Quota Reset")}: ${formatResetPeriod(plan, t)}`
                   : null,

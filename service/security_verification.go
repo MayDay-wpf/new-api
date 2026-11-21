@@ -320,6 +320,18 @@ func securityVerificationPolicy(scope string, state model.UserVerificationState)
 	}
 	switch scope {
 	case VerificationScopeChannelKeyRead, VerificationScopePasskeyDelete, VerificationScopeLogin:
+		// Reading a channel key is root-only and must always offer a way to step
+		// up. Without this fallback a root user who never enrolled 2FA or a
+		// Passkey would get no verification method at all, so the saved key could
+		// never be revealed from the channel editor. Fall back to the account's
+		// own password (or a linked OAuth provider), like other step-up scopes.
+		if scope == VerificationScopeChannelKeyRead && len(methods) == 0 {
+			if state.HasPassword {
+				methods = append(methods, VerificationMethodPassword)
+			} else {
+				methods = append(methods, VerificationMethodOAuth)
+			}
+		}
 	case VerificationScopeTwoFADisable, VerificationScopeTwoFABackupCodes:
 		if !state.HasTwoFA {
 			return nil, model.ErrTwoFANotEnabled
