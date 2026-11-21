@@ -58,6 +58,14 @@ func TestPreConsumeEnforcesMultipleQuotaWindows(t *testing.T) {
 
 	require.NoError(t, consume("multi-window-1", 50))
 
+	// The log snapshot reports every window with its own limit and remaining.
+	snapshots, err := GetSubscriptionQuotaLimitSnapshots(sub.Id)
+	require.NoError(t, err)
+	require.Len(t, snapshots, 2)
+	assert.EqualValues(t, 50, snapshots[0].Used)
+	assert.EqualValues(t, 50, snapshots[0].Remain)
+	assert.EqualValues(t, 10, snapshots[1].Remain)
+
 	// The 5-hour window only has 10 left, so 20 must be rejected.
 	err = consume("multi-window-2", 20)
 	require.Error(t, err)

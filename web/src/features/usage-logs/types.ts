@@ -370,6 +370,16 @@ export interface LogOtherData {
   subscription_consumed?: number
   subscription_remain?: number
   subscription_total?: number
+  subscription_quota_limits?: Array<{
+    key: string
+    period: 'daily' | 'weekly' | 'monthly' | 'custom'
+    custom_seconds?: number
+    limit: number
+    used: number
+    remain: number
+    window_start?: number
+    window_end?: number
+  }>
 }
 
 /**

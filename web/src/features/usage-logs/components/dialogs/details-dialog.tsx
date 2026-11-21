@@ -66,6 +66,7 @@ import {
   getCachePricingMode,
 } from '@/features/pricing/lib/cache-pricing'
 import { pluginUsageSchema } from '@/features/pricing/lib/plugin-pricing'
+import { formatQuotaLimitWindow } from '@/features/subscriptions/lib'
 import { PolicyDecisionRecord } from '@/features/system-settings/request-policies/decision-record'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
@@ -1386,13 +1387,26 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 mono
               />
             )}
-            {other.subscription_remain != null && (
-              <DetailRow
-                label={t('Remaining')}
-                value={`${formatLogQuota(other.subscription_remain)}${other.subscription_total != null ? ` / ${formatLogQuota(other.subscription_total)}` : ''}`}
-                mono
-              />
-            )}
+            {other.subscription_remain != null &&
+              (!Array.isArray(other.subscription_quota_limits) ||
+                other.subscription_quota_limits.length === 0) && (
+                <DetailRow
+                  label={t('Remaining')}
+                  value={`${formatLogQuota(other.subscription_remain)}${other.subscription_total != null ? ` / ${formatLogQuota(other.subscription_total)}` : ''}`}
+                  mono
+                />
+              )}
+            {Array.isArray(other.subscription_quota_limits) &&
+              other.subscription_quota_limits.map((limit) => (
+                <DetailRow
+                  key={limit.key}
+                  label={`${t('Remaining')} · ${formatQuotaLimitWindow(limit, t)}`}
+                  value={`${formatLogQuota(limit.remain)}${
+                    limit.limit > 0 ? ` / ${formatLogQuota(limit.limit)}` : ''
+                  }`}
+                  mono
+                />
+              ))}
           </DetailSection>
         )}
 

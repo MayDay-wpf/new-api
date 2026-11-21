@@ -2028,6 +2028,61 @@ func CleanupSubscriptionPreConsumeRecords(olderThanSeconds int64) (int64, error)
 	return res.RowsAffected, res.Error
 }
 
+// SubscriptionQuotaLimitSnapshot describes one plan limit and its usage after
+// a request. It is persisted in the consumption log detail.
+type SubscriptionQuotaLimitSnapshot struct {
+	Key           string `json:"key"`
+	Period        string `json:"period"`
+	CustomSeconds int64  `json:"custom_seconds"`
+	Limit         int64  `json:"limit"`
+	Used          int64  `json:"used"`
+	Remain        int64  `json:"remain"`
+	WindowStart   int64  `json:"window_start"`
+	WindowEnd     int64  `json:"window_end"`
+}
+
+// GetSubscriptionQuotaLimitSnapshots returns the independent quota windows of
+// a subscription with their current usage. Returns nil when the plan has no
+// quota limits, so legacy logs keep their single remaining field.
+func GetSubscriptionQuotaLimitSnapshots(userSubscriptionId int) ([]SubscriptionQuotaLimitSnapshot, error) {
+	if userSubscriptionId <= 0 || DB == nil {
+		return nil, nil
+	}
+	var sub UserSubscription
+	if err := DB.Where("id = ?", userSubscriptionId).First(&sub).Error; err != nil {
+		return nil, err
+	}
+	plan, err := getSubscriptionPlanByIdTx(nil, sub.PlanId)
+	if err != nil {
+		return nil, err
+	}
+	limits := normalizeQuotaLimitsLenient(plan.QuotaLimits)
+	if len(limits) == 0 {
+		return nil, nil
+	}
+	usages, _ := refreshQuotaLimitUsages(&sub, plan, time.Now())
+	result := make([]SubscriptionQuotaLimitSnapshot, 0, len(limits))
+	for i, limit := range limits {
+		used, windowStart, windowEnd := int64(0), int64(0), int64(0)
+		if i < len(usages) {
+			used = usages[i].Used
+			windowStart = usages[i].WindowStart
+			windowEnd = usages[i].WindowEnd
+		}
+		result = append(result, SubscriptionQuotaLimitSnapshot{
+			Key:           limit.Key(),
+			Period:        limit.Period,
+			CustomSeconds: limit.CustomSeconds,
+			Limit:         limit.Amount,
+			Used:          used,
+			Remain:        max(limit.Amount-used, 0),
+			WindowStart:   windowStart,
+			WindowEnd:     windowEnd,
+		})
+	}
+	return result, nil
+}
+
 type SubscriptionPlanInfo struct {
 	PlanId    int
 	PlanTitle string

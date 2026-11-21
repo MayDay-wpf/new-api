@@ -254,6 +254,11 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other *model.LogOther) 
 			other.SetPublic("subscription_used", usedFinal)
 			other.SetPublic("subscription_remain", remain)
 		}
+		// Independent quota windows: expose every window's limit and remaining
+		// so the log explains which cap was hit (5h / weekly / monthly ...).
+		if snapshots, err := model.GetSubscriptionQuotaLimitSnapshots(relayInfo.SubscriptionId); err == nil && len(snapshots) > 0 {
+			other.SetPublic("subscription_quota_limits", snapshots)
+		}
 		if consumed > 0 {
 			other.SetPublic("subscription_consumed", consumed)
 		}
