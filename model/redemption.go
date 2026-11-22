@@ -422,7 +422,10 @@ func RedeemCode(key string, userId int) (*RedeemResult, error) {
 		if err := tx.Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "redemption_id"}, {Name: "user_id"}},
 			DoUpdates: clause.Assignments(map[string]any{
-				"used_count":     gorm.Expr("used_count + 1"),
+				// PostgreSQL resolves an unqualified column reference in DO UPDATE
+				// against both the target row and "excluded", so the table name is
+				// required here (column reference "used_count" is ambiguous).
+				"used_count":     gorm.Expr("redemption_usages.used_count + 1"),
 				"last_used_time": now,
 			}),
 		}).Create(&RedemptionUsage{
