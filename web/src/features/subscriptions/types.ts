@@ -16,39 +16,39 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { z } from "zod";
+import { z } from 'zod'
 
 // ============================================================================
 // Subscription Plan Schema & Types
 // ============================================================================
 
 export const planQuotaLimitSchema = z.object({
-  period: z.enum(["daily", "weekly", "monthly", "custom"]),
+  period: z.enum(['daily', 'weekly', 'monthly', 'custom']),
   custom_seconds: z.number().optional().default(0),
   amount: z.number(),
-});
+})
 
-export type PlanQuotaLimit = z.infer<typeof planQuotaLimitSchema>;
+export type PlanQuotaLimit = z.infer<typeof planQuotaLimitSchema>
 
 export const quotaLimitUsageSchema = z.object({
   key: z.string(),
   used: z.number(),
   window_start: z.number(),
   window_end: z.number(),
-});
+})
 
-export type QuotaLimitUsage = z.infer<typeof quotaLimitUsageSchema>;
+export type QuotaLimitUsage = z.infer<typeof quotaLimitUsageSchema>
 
 export const subscriptionPlanSchema = z.object({
   id: z.number(),
   title: z.string(),
   subtitle: z.string().optional(),
   price_amount: z.number(),
-  currency: z.string().default("USD"),
-  duration_unit: z.enum(["year", "month", "day", "hour", "custom"]),
+  currency: z.string().default('USD'),
+  duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
   duration_value: z.number(),
   custom_seconds: z.number().optional(),
-  quota_reset_period: z.enum(["never", "daily", "weekly", "monthly", "custom"]),
+  quota_reset_period: z.enum(['never', 'daily', 'weekly', 'monthly', 'custom']),
   quota_reset_custom_seconds: z.number().optional(),
   quota_limits: z.array(planQuotaLimitSchema).optional(),
   enabled: z.boolean(),
@@ -64,12 +64,12 @@ export const subscriptionPlanSchema = z.object({
   stripe_price_id: z.string().optional(),
   creem_product_id: z.string().optional(),
   waffo_pancake_product_id: z.string().optional(),
-});
+})
 
-export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>;
+export type SubscriptionPlan = z.infer<typeof subscriptionPlanSchema>
 
 export interface PlanRecord {
-  plan: SubscriptionPlan;
+  plan: SubscriptionPlan
 }
 
 // ============================================================================
@@ -88,12 +88,12 @@ export const userSubscriptionSchema = z.object({
   amount_used: z.number(),
   next_reset_time: z.number().optional(),
   quota_limit_usage: z.array(quotaLimitUsageSchema).optional(),
-});
+})
 
-export type UserSubscription = z.infer<typeof userSubscriptionSchema>;
+export type UserSubscription = z.infer<typeof userSubscriptionSchema>
 
 export interface UserSubscriptionRecord {
-  subscription: UserSubscription;
+  subscription: UserSubscription
 }
 
 // ============================================================================
@@ -101,58 +101,93 @@ export interface UserSubscriptionRecord {
 // ============================================================================
 
 export interface ApiResponse<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
+  success: boolean
+  message?: string
+  data?: T
 }
 
 export interface PlanPayload {
-  plan: Partial<SubscriptionPlan>;
+  plan: Partial<SubscriptionPlan>
 }
 
 export interface SubscriptionPayRequest {
-  plan_id: number;
-  payment_method?: string;
+  plan_id: number
+  payment_method?: string
 }
 
 export interface SubscriptionPayResponse {
-  success: boolean;
-  message?: string;
+  success: boolean
+  message?: string
   data?: {
     // Stripe-style hosted checkout link.
-    pay_link?: string;
+    pay_link?: string
     // Waffo Pancake / Creem hosted checkout URL.
-    checkout_url?: string;
+    checkout_url?: string
     // Pancake-only: order metadata + self-service buyer session token,
     // surfaced for future flows (refund / cancel from new-api's own UI).
-    session_id?: string;
-    expires_at?: number | string;
-    order_id?: string;
-    token?: string;
-    token_expires_at?: number | string;
-  };
-  url?: string;
+    session_id?: string
+    expires_at?: number | string
+    order_id?: string
+    token?: string
+    token_expires_at?: number | string
+  }
+  url?: string
 }
 
 export interface CreateUserSubscriptionRequest {
-  plan_id: number;
+  plan_id: number
 }
 
 export interface ResetUserSubscriptionsRequest {
-  plan_id: number;
-  advance_reset_time: boolean;
+  plan_id: number
+  advance_reset_time: boolean
+  reset_total?: boolean
+  limit_keys?: string[]
 }
 
 export interface ResetPlanSubscriptionsRequest {
-  advance_reset_time: boolean;
+  advance_reset_time: boolean
+  reset_total?: boolean
+  limit_keys?: string[]
 }
 
 export interface SubscriptionResetResult {
-  plan_id: number;
-  matched_count: number;
-  reset_count: number;
-  user_count: number;
-  advance_reset_time: boolean;
+  plan_id: number
+  matched_count: number
+  reset_count: number
+  user_count: number
+  advance_reset_time: boolean
+  reset_total?: boolean
+  reset_limit_keys?: string[]
+}
+
+// ============================================================================
+// Subscription Reset Card
+// ============================================================================
+
+export interface ResetCardPreviewLimit {
+  key: string
+  period: 'daily' | 'weekly' | 'monthly' | 'custom'
+  custom_seconds: number
+  amount: number
+}
+
+export interface ResetCardPreview {
+  id: number
+  plan_id: number
+  plan_title: string
+  limits: ResetCardPreviewLimit[]
+  advance_reset_time: boolean
+  eligible: boolean
+  subscription_count: number
+}
+
+export interface ResetCardRedeemResult {
+  reset_plan_id: number
+  reset_plan_title: string
+  reset_limit_keys?: string[]
+  reset_count: number
+  advance_reset_time: boolean
 }
 
 // ============================================================================
@@ -160,9 +195,9 @@ export interface SubscriptionResetResult {
 // ============================================================================
 
 export interface SelfSubscriptionData {
-  billing_preference: string;
-  subscriptions: UserSubscriptionRecord[];
-  all_subscriptions: UserSubscriptionRecord[];
+  billing_preference: string
+  subscriptions: UserSubscriptionRecord[]
+  all_subscriptions: UserSubscriptionRecord[]
 }
 
 // ============================================================================
@@ -170,4 +205,7 @@ export interface SelfSubscriptionData {
 // ============================================================================
 
 export type SubscriptionsDialogType =
-  "create" | "update" | "toggle-status" | "reset-subscriptions";
+  | 'create'
+  | 'update'
+  | 'toggle-status'
+  | 'reset-subscriptions'

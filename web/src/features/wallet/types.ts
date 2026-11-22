@@ -37,6 +37,10 @@ export type RedemptionResponse = ApiResponse<number> & {
   /** Set when the code granted a subscription plan instead of wallet quota */
   plan_id?: number
   plan_title?: string
+  /** Set when the code reset the quota windows of an active subscription */
+  reset_plan_id?: number
+  reset_plan_title?: string
+  reset_count?: number
 }
 export type AmountResponse = ApiResponse<string>
 export type PaymentResponse = ApiResponse<Record<string, unknown>> & {

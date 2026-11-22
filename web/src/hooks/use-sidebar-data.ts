@@ -113,7 +113,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
         title: t('Personal'),
         items: [
           {
-            title: t('Wallet'),
+            title: t('Recharge & Subscriptions'),
             url: '/wallet',
             icon: Wallet,
           },

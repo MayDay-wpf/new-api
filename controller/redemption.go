@@ -14,6 +14,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// redemptionRequest marks usage limits as optional: missing max_uses /
+// per_user_limit keeps the old single-use default on create and leaves the
+// existing values unchanged on update, while an explicit 0 means unlimited.
+type redemptionRequest struct {
+	model.Redemption
+	MaxUses      *int `json:"max_uses"`
+	PerUserLimit *int `json:"per_user_limit"`
+}
+
 func GetAllRedemptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
@@ -67,11 +76,20 @@ func AddRedemption(c *gin.Context) {
 		return
 	}
 
-	redemption := model.Redemption{}
-	err := c.ShouldBindJSON(&redemption)
+	payload := redemptionRequest{}
+	err := c.ShouldBindJSON(&payload)
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	redemption := payload.Redemption
+	redemption.MaxUses = 1
+	redemption.PerUserLimit = 1
+	if payload.MaxUses != nil {
+		redemption.MaxUses = *payload.MaxUses
+	}
+	if payload.PerUserLimit != nil {
+		redemption.PerUserLimit = *payload.PerUserLimit
 	}
 	if utf8.RuneCountInString(redemption.Name) == 0 || utf8.RuneCountInString(redemption.Name) > 20 {
 		common.ApiErrorT(c, "Redemption code name length must be between 1-20")
@@ -85,8 +103,31 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorT(c, "Maximum 100 redemption codes can be generated at once")
 		return
 	}
+	if redemption.MaxUses < 0 || redemption.PerUserLimit < 0 {
+		common.ApiErrorT(c, "Usage limits cannot be negative")
+		return
+	}
 	var planTitle string
-	if redemption.PlanId > 0 {
+	if redemption.ResetPlanId > 0 {
+		if redemption.PlanId > 0 {
+			common.ApiErrorT(c, "A reset card cannot also grant a subscription plan")
+			return
+		}
+		resetPlan, err := model.GetSubscriptionPlanById(redemption.ResetPlanId)
+		if err != nil {
+			common.ApiErrorT(c, "Subscription plan not found")
+			return
+		}
+		keys, err := model.NormalizeResetCardLimitKeys(resetPlan, redemption.ResetQuotaLimitKeys)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		redemption.ResetQuotaLimitKeys = keys
+		redemption.PlanId = 0
+		redemption.Quota = 0
+		planTitle = resetPlan.Title
+	} else if redemption.PlanId > 0 {
 		plan, err := model.GetSubscriptionPlanById(redemption.PlanId)
 		if err != nil {
 			common.ApiErrorT(c, "Subscription plan not found")
@@ -109,18 +150,47 @@ func AddRedemption(c *gin.Context) {
 		return
 	}
 	var keys []string
-	if redemption.PlanId > 0 {
+	if redemption.ResetPlanId > 0 {
+		// Reset cards grant no quota and reserve no plan stock, so the batch can be
+		// inserted directly.
+		batch := make([]*model.Redemption, 0, redemption.Count)
+		for i := 0; i < redemption.Count; i++ {
+			batch = append(batch, &model.Redemption{
+				UserId:              c.GetInt("id"),
+				Name:                redemption.Name,
+				Key:                 common.GetUUID(),
+				Status:              common.RedemptionCodeStatusEnabled,
+				CreatedTime:         common.GetTimestamp(),
+				ExpiredTime:         redemption.ExpiredTime,
+				MaxUses:             redemption.MaxUses,
+				PerUserLimit:        redemption.PerUserLimit,
+				ResetPlanId:         redemption.ResetPlanId,
+				ResetQuotaLimitKeys: redemption.ResetQuotaLimitKeys,
+				ResetAdvanceTime:    redemption.ResetAdvanceTime,
+			})
+		}
+		if err := model.InsertRedemptions(batch); err != nil {
+			common.SysError(common.LogText("failed to insert reset card redemptions: %s", err.Error()))
+			common.ApiErrorT(c, "Failed to create redemption code, please try again later")
+			return
+		}
+		for _, r := range batch {
+			keys = append(keys, r.Key)
+		}
+	} else if redemption.PlanId > 0 {
 		// Subscription codes reserve plan stock, so the batch is created atomically.
 		batch := make([]*model.Redemption, 0, redemption.Count)
 		for i := 0; i < redemption.Count; i++ {
 			batch = append(batch, &model.Redemption{
-				UserId:      c.GetInt("id"),
-				Name:        redemption.Name,
-				Key:         common.GetUUID(),
-				Status:      common.RedemptionCodeStatusEnabled,
-				CreatedTime: common.GetTimestamp(),
-				PlanId:      redemption.PlanId,
-				ExpiredTime: redemption.ExpiredTime,
+				UserId:       c.GetInt("id"),
+				Name:         redemption.Name,
+				Key:          common.GetUUID(),
+				Status:       common.RedemptionCodeStatusEnabled,
+				CreatedTime:  common.GetTimestamp(),
+				PlanId:       redemption.PlanId,
+				ExpiredTime:  redemption.ExpiredTime,
+				MaxUses:      redemption.MaxUses,
+				PerUserLimit: redemption.PerUserLimit,
 			})
 		}
 		if err := model.InsertSubscriptionRedemptions(batch); err != nil {
@@ -136,16 +206,18 @@ func AddRedemption(c *gin.Context) {
 			keys = append(keys, r.Key)
 		}
 	}
-	for i := 0; redemption.PlanId <= 0 && i < redemption.Count; i++ {
+	for i := 0; redemption.PlanId <= 0 && redemption.ResetPlanId <= 0 && i < redemption.Count; i++ {
 		key := common.GetUUID()
 		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			PlanId:      redemption.PlanId,
-			ExpiredTime: redemption.ExpiredTime,
+			UserId:       c.GetInt("id"),
+			Name:         redemption.Name,
+			Key:          key,
+			CreatedTime:  common.GetTimestamp(),
+			Quota:        redemption.Quota,
+			PlanId:       redemption.PlanId,
+			ExpiredTime:  redemption.ExpiredTime,
+			MaxUses:      redemption.MaxUses,
+			PerUserLimit: redemption.PerUserLimit,
 		}
 		err = cleanRedemption.Insert()
 		if err != nil {
@@ -156,10 +228,17 @@ func AddRedemption(c *gin.Context) {
 		keys = append(keys, key)
 	}
 	auditDetails := map[string]any{
-		"name":  redemption.Name,
-		"count": redemption.Count,
+		"name":           redemption.Name,
+		"count":          redemption.Count,
+		"max_uses":       redemption.MaxUses,
+		"per_user_limit": redemption.PerUserLimit,
 	}
-	if redemption.PlanId > 0 {
+	if redemption.ResetPlanId > 0 {
+		auditDetails["reset_plan_id"] = redemption.ResetPlanId
+		auditDetails["reset_plan_title"] = planTitle
+		auditDetails["reset_limit_keys"] = redemption.ResetQuotaLimitKeys
+		auditDetails["advance_reset_time"] = redemption.ResetAdvanceTime
+	} else if redemption.PlanId > 0 {
 		auditDetails["plan_id"] = redemption.PlanId
 		auditDetails["plan_title"] = planTitle
 	} else {
@@ -190,24 +269,45 @@ func DeleteRedemption(c *gin.Context) {
 
 func UpdateRedemption(c *gin.Context) {
 	statusOnly := c.Query("status_only")
-	redemption := model.Redemption{}
-	err := c.ShouldBindJSON(&redemption)
+	payload := redemptionRequest{}
+	err := c.ShouldBindJSON(&payload)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	redemption := payload.Redemption
 	cleanRedemption, err := model.GetRedemptionById(redemption.Id)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	if statusOnly == "" {
-		if redemption.PlanId > 0 {
+		if redemption.ResetPlanId > 0 {
+			if redemption.PlanId > 0 {
+				common.ApiErrorT(c, "A reset card cannot also grant a subscription plan")
+				return
+			}
+			resetPlan, err := model.GetSubscriptionPlanById(redemption.ResetPlanId)
+			if err != nil {
+				common.ApiErrorT(c, "Subscription plan not found")
+				return
+			}
+			keys, err := model.NormalizeResetCardLimitKeys(resetPlan, redemption.ResetQuotaLimitKeys)
+			if err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			redemption.Quota = 0
+			redemption.PlanId = 0
+			redemption.ResetQuotaLimitKeys = keys
+		} else if redemption.PlanId > 0 {
 			if _, err := model.GetSubscriptionPlanById(redemption.PlanId); err != nil {
 				common.ApiErrorT(c, "Subscription plan not found")
 				return
 			}
 			redemption.Quota = 0
+			redemption.ResetPlanId = 0
+			redemption.ResetQuotaLimitKeys = nil
 		} else {
 			if redemption.Quota <= 0 {
 				common.ApiErrorT(c, "Redemption quota must be positive")
@@ -217,6 +317,8 @@ func UpdateRedemption(c *gin.Context) {
 				common.ApiError(c, err)
 				return
 			}
+			redemption.ResetPlanId = 0
+			redemption.ResetQuotaLimitKeys = nil
 		}
 		if err := validateExpiredTime(redemption.ExpiredTime); err != nil {
 			common.ApiError(c, err)
@@ -226,7 +328,16 @@ func UpdateRedemption(c *gin.Context) {
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
 		cleanRedemption.PlanId = redemption.PlanId
+		cleanRedemption.ResetPlanId = redemption.ResetPlanId
+		cleanRedemption.ResetQuotaLimitKeys = redemption.ResetQuotaLimitKeys
+		cleanRedemption.ResetAdvanceTime = redemption.ResetAdvanceTime
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		if payload.MaxUses != nil {
+			cleanRedemption.MaxUses = *payload.MaxUses
+		}
+		if payload.PerUserLimit != nil {
+			cleanRedemption.PerUserLimit = *payload.PerUserLimit
+		}
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status

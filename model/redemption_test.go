@@ -102,10 +102,11 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 
 func setupRedeemFixture(t *testing.T, quota int) (userId int, key string) {
 	t.Helper()
-	require.NoError(t, DB.AutoMigrate(&Redemption{}))
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &RedemptionUsage{}))
 	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
 	t.Cleanup(func() {
 		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&RedemptionUsage{}).Error)
 		DB.Exec("DELETE FROM users")
 		DB.Exec("DELETE FROM logs")
 	})
@@ -115,11 +116,13 @@ func setupRedeemFixture(t *testing.T, quota int) (userId int, key string) {
 
 	key = "10000000000000000000000000000001"
 	redemption := &Redemption{
-		Name:        "redeem-test",
-		Key:         key,
-		Status:      common.RedemptionCodeStatusEnabled,
-		Quota:       quota,
-		CreatedTime: common.GetTimestamp(),
+		Name:         "redeem-test",
+		Key:          key,
+		Status:       common.RedemptionCodeStatusEnabled,
+		Quota:        quota,
+		CreatedTime:  common.GetTimestamp(),
+		MaxUses:      1,
+		PerUserLimit: 1,
 	}
 	require.NoError(t, DB.Create(redemption).Error)
 	return user.Id, key
@@ -168,13 +171,48 @@ func TestRedemptionQuotaRejectsWalletOverflow(t *testing.T) {
 	setupRedeemFixture(t, 500)
 
 	redemption := &Redemption{
-		Name:        "overflow-redemption",
-		Key:         "10000000000000000000000000000002",
-		Status:      common.RedemptionCodeStatusEnabled,
-		Quota:       common.MaxWalletQuota + 1,
-		CreatedTime: common.GetTimestamp(),
+		Name:         "overflow-redemption",
+		Key:          "10000000000000000000000000000002",
+		Status:       common.RedemptionCodeStatusEnabled,
+		Quota:        common.MaxWalletQuota + 1,
+		CreatedTime:  common.GetTimestamp(),
+		MaxUses:      1,
+		PerUserLimit: 1,
 	}
 	require.Error(t, redemption.Insert())
+}
+
+func TestRedeemHonorsUsageLimits(t *testing.T) {
+	userId, key := setupRedeemFixture(t, 100)
+	require.NoError(t, DB.Model(&Redemption{}).Where("name = ?", "redeem-test").Updates(map[string]any{
+		"max_uses":       2,
+		"per_user_limit": 1,
+	}).Error)
+
+	quota, err := Redeem(key, userId)
+	require.NoError(t, err)
+	assert.Equal(t, 100, quota)
+
+	// The same account cannot exceed its per-account limit.
+	_, err = Redeem(key, userId)
+	require.Error(t, err)
+
+	second := &User{Username: "redeem-user-2", Password: "password", Status: common.UserStatusEnabled, Quota: 0, AffCode: "redeem-aff-2"}
+	require.NoError(t, DB.Create(second).Error)
+	quota, err = Redeem(key, second.Id)
+	require.NoError(t, err)
+	assert.Equal(t, 100, quota)
+
+	// The total usage limit is exhausted, so a new account is rejected too.
+	third := &User{Username: "redeem-user-3", Password: "password", Status: common.UserStatusEnabled, Quota: 0, AffCode: "redeem-aff-3"}
+	require.NoError(t, DB.Create(third).Error)
+	_, err = Redeem(key, third.Id)
+	require.Error(t, err)
+
+	var redemption Redemption
+	require.NoError(t, DB.First(&redemption, "name = ?", "redeem-test").Error)
+	assert.Equal(t, 2, redemption.UsedCount)
+	assert.Equal(t, common.RedemptionCodeStatusUsed, redemption.Status)
 }
 
 // Exactly one of several concurrent redeems of the same code may win, and

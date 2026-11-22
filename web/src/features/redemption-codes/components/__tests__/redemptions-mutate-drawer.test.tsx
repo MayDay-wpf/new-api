@@ -345,6 +345,26 @@ describe('redemption drawer', () => {
     }
   )
 
+  test('submits the total and per-account usage limits', async () => {
+    const original = redemption(1)
+    const updates: Array<Record<string, unknown>> = []
+    apiClient.get = async () => ({ data: { success: true, data: original } })
+    apiClient.put = async (_url, data) => {
+      updates.push(data as Record<string, unknown>)
+      return { data: { success: true, data: original } }
+    }
+
+    await renderDrawer(original)
+    await waitForLoadedForm()
+    changeInput(getControlByLabel('Total usage limit'), '5')
+    changeInput(getControlByLabel('Per-account usage limit'), '0')
+    submitForm()
+    await waitFor(() => expect(updates).toHaveLength(1))
+
+    expect(updates[0]?.max_uses).toBe(5)
+    expect(updates[0]?.per_user_limit).toBe(0)
+  })
+
   test('ignores an older response after switching records', async () => {
     const first = redemption(1, 500001)
     const second = redemption(2, 1000001)

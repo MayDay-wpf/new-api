@@ -27,6 +27,8 @@ import type {
   ResetUserSubscriptionsRequest,
   ResetPlanSubscriptionsRequest,
   SubscriptionResetResult,
+  ResetCardPreview,
+  ResetCardRedeemResult,
   SubscriptionPayResponse,
   SubscriptionPayRequest,
   SelfSubscriptionData,
@@ -216,6 +218,26 @@ export async function getSelfSubscriptionFull(): Promise<
   ApiResponse<SelfSubscriptionData>
 > {
   const res = await api.get('/api/subscription/self')
+  return res.data
+}
+
+// ============================================================================
+// Subscription Reset Card Redemption
+// ============================================================================
+
+// Validates a reset card without consuming it, so the UI can show the
+// confirmation dialog first.
+export async function previewSubscriptionResetCard(
+  key: string
+): Promise<ApiResponse<ResetCardPreview>> {
+  const res = await api.post('/api/subscription/reset-card/preview', { key })
+  return res.data
+}
+
+export async function redeemSubscriptionResetCard(
+  key: string
+): Promise<ApiResponse<ResetCardRedeemResult>> {
+  const res = await api.post('/api/subscription/reset-card/redeem', { key })
   return res.data
 }
 

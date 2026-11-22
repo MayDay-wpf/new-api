@@ -121,7 +121,7 @@ export function SidebarModulesCard() {
       modules: [
         {
           key: 'topup',
-          title: t('Wallet Management'),
+          title: t('Recharge & Subscriptions'),
           description: t('Balance and top-up management'),
         },
         {

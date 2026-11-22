@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -31,6 +31,7 @@ import {
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Combobox } from '@/components/ui/combobox'
 import {
   Form,
@@ -44,6 +45,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
 import {
   Sheet,
   SheetClose,
@@ -54,6 +56,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { getAdminPlans } from '@/features/subscriptions/api'
+import {
+  formatQuotaLimitWindow,
+  quotaLimitKey,
+} from '@/features/subscriptions/lib'
 import type { PlanRecord } from '@/features/subscriptions/types'
 import {
   formatQuotaWithCurrency,
@@ -116,12 +122,14 @@ export function RedemptionsMutateDrawer({
   })
   const redemptionType = form.watch('type')
   const isSubscriptionType = redemptionType === 'subscription'
+  const isResetType = redemptionType === 'reset'
+  const needsPlans = isSubscriptionType || isResetType
   const [plans, setPlans] = useState<PlanRecord[]>([])
   const [plansLoaded, setPlansLoaded] = useState(false)
 
-  // Load subscription plans lazily, only when a subscription code is being edited/created
+  // Load subscription plans lazily, only when a subscription/reset code is being edited/created
   useEffect(() => {
-    if (!open || !isSubscriptionType || plansLoaded) return
+    if (!open || !needsPlans || plansLoaded) return
     let ignoreResult = false
     void getAdminPlans()
       .then((result) => {
@@ -139,7 +147,7 @@ export function RedemptionsMutateDrawer({
     return () => {
       ignoreResult = true
     }
-  }, [open, isSubscriptionType, plansLoaded])
+  }, [open, needsPlans, plansLoaded])
 
   useEffect(() => {
     if (!open) setPlansLoaded(false)
@@ -147,6 +155,24 @@ export function RedemptionsMutateDrawer({
 
   const getPlanTitle = (planId: number) =>
     plans.find((p) => p.plan.id === planId)?.plan.title || `#${planId}`
+
+  const resetPlanId = form.watch('reset_plan_id')
+  const resetPlanLimits = useMemo(
+    () =>
+      plans.find((p) => p.plan.id === resetPlanId)?.plan.quota_limits ?? [],
+    [plans, resetPlanId]
+  )
+
+  const handleResetPlanChange = (planId: number) => {
+    form.setValue('reset_plan_id', planId, { shouldValidate: true })
+    const limits =
+      plans.find((p) => p.plan.id === planId)?.plan.quota_limits ?? []
+    form.setValue(
+      'reset_quota_limit_keys',
+      limits.map((limit) => quotaLimitKey(limit)),
+      { shouldValidate: true }
+    )
+  }
 
   // Load existing data when updating
   useEffect(() => {
@@ -275,8 +301,16 @@ export function RedemptionsMutateDrawer({
     if (!isUpdate) {
       const name = form.getValues('name')
       if (!name?.trim()) {
-        const planId = form.getValues('plan_id')
-        if (form.getValues('type') === 'subscription') {
+        const type = form.getValues('type')
+        if (type === 'subscription') {
+          const planId = form.getValues('plan_id')
+          if (planId > 0) {
+            form.setValue('name', getPlanTitle(planId).slice(0, 20), {
+              shouldValidate: true,
+            })
+          }
+        } else if (type === 'reset') {
+          const planId = form.getValues('reset_plan_id')
           if (planId > 0) {
             form.setValue('name', getPlanTitle(planId).slice(0, 20), {
               shouldValidate: true,
@@ -310,6 +344,16 @@ export function RedemptionsMutateDrawer({
     submitButtonLabel = t('Loading...')
   } else if (isSubmitting) {
     submitButtonLabel = t('Saving...')
+  }
+  let typeDescription = t("Redeeming adds the quota to the user's balance.")
+  if (isSubscriptionType) {
+    typeDescription = t(
+      'Redeeming grants the selected subscription plan. Each unredeemed code reserves one unit of plan stock.'
+    )
+  } else if (isResetType) {
+    typeDescription = t(
+      'Redeeming the reset card resets the selected quota limit windows of the user\'s active subscription for this plan.'
+    )
   }
 
   return (
@@ -357,9 +401,13 @@ export function RedemptionsMutateDrawer({
                             onValueChange={(value) => {
                               if (
                                 value === 'quota' ||
-                                value === 'subscription'
+                                value === 'subscription' ||
+                                value === 'reset'
                               ) {
                                 field.onChange(value)
+                                form.setValue('plan_id', 0)
+                                form.setValue('reset_plan_id', 0)
+                                form.setValue('reset_quota_limit_keys', [])
                               }
                             }}
                             disabled={isUpdate}
@@ -370,6 +418,10 @@ export function RedemptionsMutateDrawer({
                               {
                                 value: 'subscription',
                                 label: t('Subscription'),
+                              },
+                              {
+                                value: 'reset',
+                                label: t('Reset Card'),
                               },
                             ].map((option) => (
                               <div
@@ -390,13 +442,7 @@ export function RedemptionsMutateDrawer({
                           </RadioGroup>
                         </FormControl>
                         <FormDescription>
-                          {isSubscriptionType
-                            ? t(
-                                'Redeeming grants the selected subscription plan. Each unredeemed code reserves one unit of plan stock.'
-                              )
-                            : t(
-                                "Redeeming adds the quota to the user's balance."
-                              )}
+                          {typeDescription}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -420,7 +466,7 @@ export function RedemptionsMutateDrawer({
                     )}
                   />
 
-                  {isSubscriptionType ? (
+                  {isSubscriptionType && (
                     <FormField
                       control={form.control}
                       name='plan_id'
@@ -459,7 +505,129 @@ export function RedemptionsMutateDrawer({
                         </FormItem>
                       )}
                     />
-                  ) : (
+                  )}
+
+                  {isResetType && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name='reset_plan_id'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Subscription plan')}</FormLabel>
+                            <FormControl>
+                              <Combobox
+                                options={plans.map((p) => ({
+                                  value: String(p.plan.id),
+                                  label: p.plan.title,
+                                }))}
+                                value={
+                                  field.value > 0 ? String(field.value) : ''
+                                }
+                                onValueChange={(v) =>
+                                  v !== null &&
+                                  handleResetPlanChange(Number(v) || 0)
+                                }
+                                placeholder={t('Select subscription plan')}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Only plans with configured quota limits can issue reset cards.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name='reset_quota_limit_keys'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Limits to reset')}</FormLabel>
+                            {resetPlanLimits.length === 0 ? (
+                              <p className='text-muted-foreground text-sm'>
+                                {t(
+                                  'This subscription plan has no resettable quota limits'
+                                )}
+                              </p>
+                            ) : (
+                              <div className='space-y-2'>
+                                {resetPlanLimits.map((limit) => {
+                                  const key = quotaLimitKey(limit)
+                                  const checked = field.value.includes(key)
+                                  return (
+                                    <label
+                                      key={key}
+                                      className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'
+                                    >
+                                      <span className='flex items-center gap-2'>
+                                        <Checkbox
+                                          checked={checked}
+                                          onCheckedChange={(checkedValue) =>
+                                            field.onChange(
+                                              checkedValue
+                                                ? [...field.value, key]
+                                                : field.value.filter(
+                                                    (item) => item !== key
+                                                  )
+                                            )
+                                          }
+                                        />
+                                        <span>
+                                          {formatQuotaLimitWindow(limit, t)}
+                                        </span>
+                                      </span>
+                                      <span className='text-muted-foreground text-xs'>
+                                        {Number(limit.amount || 0) > 0
+                                          ? formatQuota(Number(limit.amount))
+                                          : t('Unlimited')}
+                                      </span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            <FormDescription>
+                              {t(
+                                'Select one or more quota windows. Only the selected windows are cleared when the card is redeemed.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name='reset_advance_time'
+                        render={({ field }) => (
+                          <FormItem>
+                            <label className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
+                              <span>{t('Advance next reset time')}</span>
+                              <Switch
+                                checked={field.value}
+                                onCheckedChange={(checked) =>
+                                  field.onChange(!!checked)
+                                }
+                                aria-label={t('Advance next reset time')}
+                              />
+                            </label>
+                            <FormDescription>
+                              {t(
+                                'When enabled, the next automatic reset is recalculated from the moment the card is redeemed.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+
+                  {!isSubscriptionType && !isResetType && (
                     <FormField
                       control={form.control}
                       name='quota_dollars'
@@ -491,6 +659,73 @@ export function RedemptionsMutateDrawer({
                       )}
                     />
                   )}
+
+                  <div className='grid gap-4 sm:grid-cols-2'>
+                    <FormField
+                      control={form.control}
+                      name='max_uses'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Total usage limit')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type='number'
+                              min='0'
+                              step='1'
+                              onChange={(e) =>
+                                field.onChange(
+                                  Math.max(
+                                    0,
+                                    Number.parseInt(e.target.value, 10) || 0
+                                  )
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {isUpdate
+                              ? t(
+                                  'Already used {{count}} times. 0 means unlimited',
+                                  { count: loadedRedemption?.used_count ?? 0 }
+                                )
+                              : t('0 means unlimited')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name='per_user_limit'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Per-account usage limit')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type='number'
+                              min='0'
+                              step='1'
+                              onChange={(e) =>
+                                field.onChange(
+                                  Math.max(
+                                    0,
+                                    Number.parseInt(e.target.value, 10) || 0
+                                  )
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t('0 means unlimited')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <FormField
                     control={form.control}

@@ -1317,11 +1317,14 @@ func TopUp(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"message":    "",
-		"data":       result.Quota,
-		"plan_id":    result.PlanId,
-		"plan_title": result.PlanTitle,
+		"success":          true,
+		"message":          "",
+		"data":             result.Quota,
+		"plan_id":          result.PlanId,
+		"plan_title":       result.PlanTitle,
+		"reset_plan_id":    result.ResetPlanId,
+		"reset_plan_title": result.ResetPlanTitle,
+		"reset_count":      result.ResetCount,
 	})
 }
 

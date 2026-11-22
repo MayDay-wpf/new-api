@@ -25,27 +25,42 @@ import { Switch } from '@/components/ui/switch'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { resetPlanSubscriptions } from '../../api'
+import {
+  fullResetScope,
+  isResetScopeEmpty,
+  type ResetScopeValue,
+} from '../../lib/reset-scope'
+import { ResetScopeSelector } from '../reset-scope-selector'
 import { useSubscriptions } from '../subscriptions-provider'
 
 export function ResetSubscriptionsDialog() {
   const { t } = useTranslation()
   const { open, setOpen, currentRow, triggerRefresh } = useSubscriptions()
   const [advanceResetTime, setAdvanceResetTime] = useState(true)
+  const [resetScope, setResetScope] = useState<ResetScopeValue>({
+    resetTotal: true,
+    limitKeys: [],
+  })
   const [resetting, setResetting] = useState(false)
   const isOpen = open === 'reset-subscriptions'
   const plan = currentRow?.plan
   const planLabel = plan?.title || (plan?.id ? `#${plan.id}` : '-')
 
   useEffect(() => {
-    if (isOpen) setAdvanceResetTime(true)
-  }, [isOpen])
+    if (isOpen) {
+      setAdvanceResetTime(true)
+      setResetScope(fullResetScope(plan))
+    }
+  }, [isOpen, plan])
 
   const handleConfirm = async () => {
-    if (!plan?.id) return
+    if (!plan?.id || isResetScopeEmpty(resetScope)) return
     setResetting(true)
     try {
       const res = await resetPlanSubscriptions(plan.id, {
         advance_reset_time: advanceResetTime,
+        reset_total: resetScope.resetTotal,
+        limit_keys: resetScope.limitKeys,
       })
       if (res.success) {
         toast.success(
@@ -75,17 +90,24 @@ export function ResetSubscriptionsDialog() {
       })}
       confirmText={t('Reset quota')}
       handleConfirm={handleConfirm}
-      disabled={!plan?.id}
+      disabled={!plan?.id || isResetScopeEmpty(resetScope)}
       isLoading={resetting}
     >
-      <label className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
-        <span>{t('Advance next reset time')}</span>
-        <Switch
-          checked={advanceResetTime}
-          onCheckedChange={(checked) => setAdvanceResetTime(!!checked)}
-          aria-label={t('Advance next reset time')}
+      <div className='space-y-3'>
+        <ResetScopeSelector
+          plan={plan}
+          value={resetScope}
+          onChange={setResetScope}
         />
-      </label>
+        <label className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
+          <span>{t('Advance next reset time')}</span>
+          <Switch
+            checked={advanceResetTime}
+            onCheckedChange={(checked) => setAdvanceResetTime(!!checked)}
+            aria-label={t('Advance next reset time')}
+          />
+        </label>
+      </div>
     </ConfirmDialog>
   )
 }

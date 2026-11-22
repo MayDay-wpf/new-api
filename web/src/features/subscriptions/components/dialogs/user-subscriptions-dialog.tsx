@@ -66,7 +66,18 @@ import {
   getQuotaLimitUsage,
   quotaLimitKey,
 } from '../../lib/format'
-import type { PlanRecord, UserSubscriptionRecord } from '../../types'
+import {
+  fullResetScope,
+  isResetScopeEmpty,
+  type ResetScopeValue,
+} from '../../lib/reset-scope'
+import type {
+  PlanRecord,
+  SubscriptionPlan,
+  UserSubscription,
+  UserSubscriptionRecord,
+} from '../../types'
+import { ResetScopeSelector } from '../reset-scope-selector'
 
 interface Props {
   open: boolean
@@ -119,9 +130,15 @@ export function UserSubscriptionsDialog(props: Props) {
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [resetting, setResetting] = useState(false)
   const [advanceResetTime, setAdvanceResetTime] = useState(true)
+  const [resetScope, setResetScope] = useState<ResetScopeValue>({
+    resetTotal: true,
+    limitKeys: [],
+  })
   const [resetAction, setResetAction] = useState<{
     planId: number
     planTitle: string
+    plan?: SubscriptionPlan
+    subscription?: UserSubscription
   } | null>(null)
   const [confirmAction, setConfirmAction] = useState<{
     type: 'invalidate' | 'delete'
@@ -223,12 +240,16 @@ export function UserSubscriptionsDialog(props: Props) {
   }
 
   const handleResetConfirm = async () => {
-    if (!props.user?.id || !resetAction) return
+    if (!props.user?.id || !resetAction || isResetScopeEmpty(resetScope)) {
+      return
+    }
     setResetting(true)
     try {
       const res = await resetUserSubscriptionsByPlan(props.user.id, {
         plan_id: resetAction.planId,
         advance_reset_time: advanceResetTime,
+        reset_total: resetScope.resetTotal,
+        limit_keys: resetScope.limitKeys,
       })
       if (res.success) {
         toast.success(
@@ -397,12 +418,18 @@ export function UserSubscriptionsDialog(props: Props) {
                         <DropdownMenuItem
                           disabled={!isActive}
                           onClick={() => {
+                            const planRecord = plans.find(
+                              (item) => item.plan.id === sub.plan_id
+                            )?.plan
                             setAdvanceResetTime(true)
+                            setResetScope(fullResetScope(planRecord))
                             setResetAction({
                               planId: sub.plan_id,
                               planTitle:
                                 planTitleMap.get(sub.plan_id) ||
                                 `#${sub.plan_id}`,
+                              plan: planRecord,
+                              subscription: sub,
                             })
                           }}
                         >
@@ -483,16 +510,25 @@ export function UserSubscriptionsDialog(props: Props) {
           })}
           confirmText={t('Reset quota')}
           handleConfirm={handleResetConfirm}
+          disabled={isResetScopeEmpty(resetScope)}
           isLoading={resetting}
         >
-          <label className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
-            <span>{t('Advance next reset time')}</span>
-            <Switch
-              checked={advanceResetTime}
-              onCheckedChange={(checked) => setAdvanceResetTime(!!checked)}
-              aria-label={t('Advance next reset time')}
+          <div className='space-y-3'>
+            <ResetScopeSelector
+              plan={resetAction.plan}
+              subscription={resetAction.subscription}
+              value={resetScope}
+              onChange={setResetScope}
             />
-          </label>
+            <label className='flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm'>
+              <span>{t('Advance next reset time')}</span>
+              <Switch
+                checked={advanceResetTime}
+                onCheckedChange={(checked) => setAdvanceResetTime(!!checked)}
+                aria-label={t('Advance next reset time')}
+              />
+            </label>
+          </div>
         </ConfirmDialog>
       )}
     </>

@@ -43,6 +43,20 @@ export function useRedemption() {
       setRedeeming(true)
       const response = await redeemTopupCode({ key: code })
 
+      if (response.success && response.reset_plan_id) {
+        toast.success(
+          i18next.t(
+            'Reset card redeemed. Reset {{count}} subscription(s) of {{plan}}.',
+            {
+              count: response.reset_count || 0,
+              plan: response.reset_plan_title || `#${response.reset_plan_id}`,
+            }
+          )
+        )
+        await getSelf()
+        return true
+      }
+
       if (response.success && response.plan_id) {
         toast.success(
           i18next.t('Redemption successful! Subscription activated: {{plan}}', {

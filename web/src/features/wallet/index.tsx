@@ -20,6 +20,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -30,6 +31,7 @@ import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
+import { ResetCardRedeemCard } from './components/reset-card-redeem-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
 import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
@@ -80,6 +82,9 @@ export function Wallet(props: WalletProps) {
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
+  const [activeTab, setActiveTab] = useState<'balance' | 'subscription'>(
+    'balance'
+  )
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
@@ -286,21 +291,55 @@ export function Wallet(props: WalletProps) {
     []
   )
 
+  // Subscriptions are not sold on every deployment; when the subscription
+  // panel disappears, never leave the user stranded on an empty tab.
+  useEffect(() => {
+    if (!showSubscriptionPanel && activeTab === 'subscription') {
+      setActiveTab('balance')
+    }
+  }, [activeTab, showSubscriptionPanel])
+
   return (
     <>
       <SectionPageLayout>
-        <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
+        <SectionPageLayout.Title>
+          {t('Recharge & Subscriptions')}
+        </SectionPageLayout.Title>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <WalletStatsCard user={user} loading={userLoading} />
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) =>
+                setActiveTab(value === 'subscription' ? 'subscription' : 'balance')
+              }
+            >
+              <TabsList className='h-11 max-w-full flex-wrap justify-start gap-1 p-1 group-data-horizontal/tabs:h-11'>
+                <TabsTrigger
+                  value='balance'
+                  className='h-full px-5 text-[15px] font-medium'
+                >
+                  {t('Balance Top-up')}
+                </TabsTrigger>
+                {showSubscriptionPanel && (
+                  <TabsTrigger
+                    value='subscription'
+                    className='h-full px-5 text-[15px] font-medium'
+                  >
+                    {t('Subscription Purchase')}
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </Tabs>
 
             <div
               className={
-                showSubscriptionPanel
-                  ? 'grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:items-start'
-                  : 'grid gap-4'
+                activeTab === 'balance'
+                  ? 'flex flex-col gap-4 sm:gap-5'
+                  : 'hidden'
               }
             >
+              <WalletStatsCard user={user} loading={userLoading} />
+
               <div id='wallet-add-funds' className='scroll-mt-4'>
                 <RechargeFormCard
                   topupInfo={topupInfo}
@@ -335,6 +374,30 @@ export function Wallet(props: WalletProps) {
                 />
               </div>
 
+              <AffiliateRewardsCard
+                user={user}
+                affiliateLink={affiliateLink}
+                onTransfer={() => setTransferDialogOpen(true)}
+                complianceConfirmed={
+                  topupInfo?.payment_compliance_confirmed !== false
+                }
+                loading={affiliateLoading}
+              />
+            </div>
+
+            <div
+              className={
+                activeTab === 'subscription'
+                  ? 'flex flex-col gap-4 sm:gap-5'
+                  : 'hidden'
+              }
+            >
+              <ResetCardRedeemCard
+                onRedeemed={async () => {
+                  setSubscriptionRefreshKey((key) => key + 1)
+                  await fetchUser()
+                }}
+              />
               <SubscriptionPlansCard
                 topupInfo={topupInfo}
                 onAvailabilityChange={handleSubscriptionAvailabilityChange}
@@ -343,16 +406,6 @@ export function Wallet(props: WalletProps) {
                 refreshKey={subscriptionRefreshKey}
               />
             </div>
-
-            <AffiliateRewardsCard
-              user={user}
-              affiliateLink={affiliateLink}
-              onTransfer={() => setTransferDialogOpen(true)}
-              complianceConfirmed={
-                topupInfo?.payment_compliance_confirmed !== false
-              }
-              loading={affiliateLoading}
-            />
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

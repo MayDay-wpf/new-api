@@ -101,6 +101,55 @@ func UpdateSubscriptionPreference(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"billing_preference": pref})
 }
 
+type ResetCardRedeemRequest struct {
+	Key string `json:"key"`
+}
+
+// PreviewSubscriptionResetCard validates a reset card and reports what would be
+// reset. It never consumes the code, so the UI can show a confirmation dialog
+// first.
+func PreviewSubscriptionResetCard(c *gin.Context) {
+	if !requirePaymentCompliance(c) {
+		return
+	}
+	var req ResetCardRedeemRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Key) == "" {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	preview, err := model.PreviewResetCard(strings.TrimSpace(req.Key), c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, preview)
+}
+
+// RedeemSubscriptionResetCard consumes a reset card and resets the selected
+// quota windows of the user's active subscriptions for the card's plan. When the
+// user has no eligible subscription the transaction rolls back and the code
+// stays unused.
+func RedeemSubscriptionResetCard(c *gin.Context) {
+	if !requirePaymentCompliance(c) {
+		return
+	}
+	var req ResetCardRedeemRequest
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Key) == "" {
+		common.ApiErrorT(c, "Invalid parameters")
+		return
+	}
+	result, err := model.RedeemCode(strings.TrimSpace(req.Key), c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if result.ResetPlanId <= 0 {
+		common.ApiErrorT(c, "This is not a subscription reset card")
+		return
+	}
+	common.ApiSuccess(c, result)
+}
+
 func SubscriptionRequestBalancePay(c *gin.Context) {
 	if !requirePaymentCompliance(c) {
 		return
@@ -458,8 +507,24 @@ type AdminCreateUserSubscriptionRequest struct {
 }
 
 type AdminResetSubscriptionRequest struct {
-	PlanId           int   `json:"plan_id"`
-	AdvanceResetTime *bool `json:"advance_reset_time"`
+	PlanId           int      `json:"plan_id"`
+	AdvanceResetTime *bool    `json:"advance_reset_time"`
+	ResetTotal       *bool    `json:"reset_total"`
+	LimitKeys        []string `json:"limit_keys"`
+}
+
+// resetScope resolves the optional scope fields. A request that carries neither
+// reset_total nor limit_keys keeps the legacy full reset, so older clients keep
+// working unchanged.
+func (r *AdminResetSubscriptionRequest) resetScope() *model.SubscriptionResetScope {
+	if r.ResetTotal == nil && r.LimitKeys == nil {
+		return nil
+	}
+	scope := &model.SubscriptionResetScope{LimitKeys: r.LimitKeys}
+	if r.ResetTotal != nil {
+		scope.ResetTotal = *r.ResetTotal
+	}
+	return scope
 }
 
 func resolveAdvanceResetTime(value *bool) bool {
@@ -522,21 +587,32 @@ func AdminResetUserSubscriptionsByPlan(c *gin.Context) {
 		return
 	}
 	advanceResetTime := resolveAdvanceResetTime(req.AdvanceResetTime)
-	result, err := model.AdminResetUserSubscriptionsByPlan(userId, req.PlanId, advanceResetTime)
+	result, err := model.AdminResetUserSubscriptionsByPlan(userId, req.PlanId, req.resetScope(), advanceResetTime)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	recordSubscriptionResetUserLogs(c, result, auditOperatorInfo(c))
-	recordManageAuditFor(c, userId, "subscription.user_plan_reset", map[string]any{
-		"target_user_id":     userId,
+	recordManageAuditFor(c, userId, "subscription.user_plan_reset", subscriptionResetAuditParams(result, userId))
+	common.ApiSuccess(c, result)
+}
+
+// subscriptionResetAuditParams renders the scope of an admin reset into the
+// audit payload, so the log shows which counters were cleared.
+func subscriptionResetAuditParams(result *model.SubscriptionResetResult, targetUserId int) map[string]any {
+	params := map[string]any{
 		"plan_id":            result.PlanId,
 		"plan_title":         result.PlanTitle,
 		"reset_count":        result.ResetCount,
 		"user_count":         result.UserCount,
 		"advance_reset_time": result.AdvanceResetTime,
-	})
-	common.ApiSuccess(c, result)
+		"reset_total":        result.ResetTotal,
+		"reset_limit_keys":   result.ResetLimitKeys,
+	}
+	if targetUserId > 0 {
+		params["target_user_id"] = targetUserId
+	}
+	return params
 }
 
 func AdminResetPlanSubscriptions(c *gin.Context) {
@@ -551,7 +627,7 @@ func AdminResetPlanSubscriptions(c *gin.Context) {
 		return
 	}
 	advanceResetTime := resolveAdvanceResetTime(req.AdvanceResetTime)
-	result, err := model.AdminResetPlanSubscriptions(planId, advanceResetTime)
+	result, err := model.AdminResetPlanSubscriptions(planId, req.resetScope(), advanceResetTime)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -559,13 +635,7 @@ func AdminResetPlanSubscriptions(c *gin.Context) {
 	recordSubscriptionResetUserLogs(c, result, auditOperatorInfo(c))
 	common.SysLog(common.LogText("admin reset subscription plan %d quota: reset_count=%d user_count=%d advance_reset_time=%t",
 		result.PlanId, result.ResetCount, result.UserCount, result.AdvanceResetTime))
-	recordManageAudit(c, "subscription.plan_reset", map[string]any{
-		"plan_id":            result.PlanId,
-		"plan_title":         result.PlanTitle,
-		"reset_count":        result.ResetCount,
-		"user_count":         result.UserCount,
-		"advance_reset_time": result.AdvanceResetTime,
-	})
+	recordManageAudit(c, "subscription.plan_reset", subscriptionResetAuditParams(result, 0))
 	common.ApiSuccess(c, result)
 }
 

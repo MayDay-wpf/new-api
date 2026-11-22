@@ -338,6 +338,8 @@ func migrateDB() error {
 	if err := migrateOptionPrimaryKey(DB); err != nil {
 		common.SysError(common.LogText("failed to migrate options primary key: %s", err.Error()))
 	}
+	// Redemption codes created before usage limits existed are single-use.
+	redemptionLimitsColumnExisted := DB.Migrator().HasColumn(&Redemption{}, "max_uses")
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -350,6 +352,7 @@ func migrateDB() error {
 		&Option{},
 		&LoginEncryptionKey{},
 		&Redemption{},
+		&RedemptionUsage{},
 		&Ability{},
 		&Log{},
 		&Midjourney{},
@@ -379,6 +382,12 @@ func migrateDB() error {
 	)
 	if err != nil {
 		return err
+	}
+	if !redemptionLimitsColumnExisted {
+		if err := DB.Model(&Redemption{}).Where("max_uses = 0 AND per_user_limit = 0").
+			Updates(map[string]any{"max_uses": 1, "per_user_limit": 1}).Error; err != nil {
+			return err
+		}
 	}
 	if err := InitializeUserAuthVersions(); err != nil {
 		return err

@@ -61,7 +61,7 @@ func TestAdminResetUserSubscriptionsByPlanResetsAllActiveMatchesAndAdvancesTime(
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9206, UserId: 101, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 900, StartTime: now - 3600, EndTime: activeEnd, Status: "cancelled", LastResetTime: now - 3600, NextResetTime: now + 120})
 
 	beforeReset := GetDBTimestamp()
-	result, err := AdminResetUserSubscriptionsByPlan(101, plan.Id, true)
+	result, err := AdminResetUserSubscriptionsByPlan(101, plan.Id, nil, true)
 	afterReset := GetDBTimestamp()
 
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestAdminResetUserSubscriptionsByPlanKeepsResetTimes(t *testing.T) {
 	nextReset := now + 86400
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9302, UserId: 201, PlanId: plan.Id, AmountTotal: 2000, AmountUsed: 1200, StartTime: now - 172800, EndTime: now + 30*24*3600, Status: "active", LastResetTime: lastReset, NextResetTime: nextReset})
 
-	result, err := AdminResetUserSubscriptionsByPlan(201, plan.Id, false)
+	result, err := AdminResetUserSubscriptionsByPlan(201, plan.Id, nil, false)
 
 	require.NoError(t, err)
 	assert.False(t, result.AdvanceResetTime)
@@ -130,7 +130,7 @@ func TestAdminResetUserSubscriptionsByPlanNoActiveMatchReturnsError(t *testing.T
 	seedSubscriptionResetPlan(t, plan)
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9402, UserId: 301, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 500, StartTime: now - 7200, EndTime: now - 1, Status: "active"})
 
-	result, err := AdminResetUserSubscriptionsByPlan(301, plan.Id, true)
+	result, err := AdminResetUserSubscriptionsByPlan(301, plan.Id, nil, true)
 
 	require.Error(t, err)
 	assert.Nil(t, result)
@@ -159,7 +159,7 @@ func TestAdminResetPlanSubscriptionsResetsAllActiveUsers(t *testing.T) {
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9505, UserId: 403, PlanId: plan.Id, AmountTotal: 3000, AmountUsed: 1300, StartTime: now - 7200, EndTime: now - 1, Status: "active", LastResetTime: now - 3600, NextResetTime: now - 10})
 	seedSubscriptionResetSub(t, &UserSubscription{Id: 9506, UserId: 404, PlanId: plan.Id, AmountTotal: 3000, AmountUsed: 1400, StartTime: now - 3600, EndTime: activeEnd, Status: "cancelled", LastResetTime: now - 3600, NextResetTime: now + 10})
 
-	result, err := AdminResetPlanSubscriptions(plan.Id, true)
+	result, err := AdminResetPlanSubscriptions(plan.Id, nil, true)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -190,7 +190,7 @@ func TestAdminResetPlanSubscriptionsNoMatchSucceeds(t *testing.T) {
 	}
 	seedSubscriptionResetPlan(t, plan)
 
-	result, err := AdminResetPlanSubscriptions(plan.Id, true)
+	result, err := AdminResetPlanSubscriptions(plan.Id, nil, true)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -198,4 +198,90 @@ func TestAdminResetPlanSubscriptionsNoMatchSucceeds(t *testing.T) {
 	assert.Zero(t, result.ResetCount)
 	assert.Zero(t, result.UserCount)
 	assert.Empty(t, result.AffectedUserIds)
+}
+
+func TestAdminResetUserSubscriptionsByPlanSelectsWindows(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	plan := &SubscriptionPlan{
+		Id:            9801,
+		Title:         "Scoped",
+		PriceAmount:   10,
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   1000,
+		QuotaLimits: SubscriptionPlanQuotaLimits{
+			{Period: SubscriptionResetDaily, Amount: 100},
+			{Period: SubscriptionResetWeekly, Amount: 500},
+		},
+	}
+	seedSubscriptionResetPlan(t, plan)
+
+	start := now - 3600
+	anchor := time.Unix(start, 0)
+	dailyStart, dailyEnd := quotaLimitWindow(plan.QuotaLimits[0], anchor, time.Unix(now, 0))
+	weeklyStart, weeklyEnd := quotaLimitWindow(plan.QuotaLimits[1], anchor, time.Unix(now, 0))
+	seedSubscriptionResetSub(t, &UserSubscription{
+		Id:          9802,
+		UserId:      501,
+		PlanId:      plan.Id,
+		AmountTotal: 1000,
+		AmountUsed:  400,
+		StartTime:   start,
+		EndTime:     now + 30*24*3600,
+		Status:      "active",
+		QuotaLimitUsage: SubscriptionQuotaLimitUsages{
+			{Key: SubscriptionResetDaily, Used: 40, WindowStart: dailyStart, WindowEnd: dailyEnd},
+			{Key: SubscriptionResetWeekly, Used: 200, WindowStart: weeklyStart, WindowEnd: weeklyEnd},
+		},
+	})
+
+	result, err := AdminResetUserSubscriptionsByPlan(501, plan.Id, &SubscriptionResetScope{LimitKeys: []string{SubscriptionResetDaily}}, false)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.ResetTotal)
+	assert.Equal(t, []string{SubscriptionResetDaily}, result.ResetLimitKeys)
+
+	sub := getSubscriptionResetSub(t, 9802)
+	assert.EqualValues(t, 400, sub.AmountUsed)
+	require.Len(t, sub.QuotaLimitUsage, 2)
+	for _, usage := range sub.QuotaLimitUsage {
+		switch usage.Key {
+		case SubscriptionResetDaily:
+			assert.Zero(t, usage.Used)
+		case SubscriptionResetWeekly:
+			assert.EqualValues(t, 200, usage.Used)
+		}
+	}
+}
+
+func TestAdminResetUserSubscriptionsByPlanRejectsUnknownOrEmptyScope(t *testing.T) {
+	truncateTables(t)
+
+	now := GetDBTimestamp()
+	plan := &SubscriptionPlan{
+		Id:            9901,
+		Title:         "Scope validation",
+		PriceAmount:   10,
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   1000,
+		QuotaLimits: SubscriptionPlanQuotaLimits{
+			{Period: SubscriptionResetDaily, Amount: 100},
+		},
+	}
+	seedSubscriptionResetPlan(t, plan)
+	seedSubscriptionResetSub(t, &UserSubscription{Id: 9902, UserId: 601, PlanId: plan.Id, AmountTotal: 1000, AmountUsed: 300, StartTime: now - 3600, EndTime: now + 30*24*3600, Status: "active"})
+
+	_, err := AdminResetUserSubscriptionsByPlan(601, plan.Id, &SubscriptionResetScope{LimitKeys: []string{SubscriptionResetMonthly}}, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no longer configured")
+
+	_, err = AdminResetUserSubscriptionsByPlan(601, plan.Id, &SubscriptionResetScope{}, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Select at least one quota limit to reset")
+
+	// A rejected request must not touch the stored counters.
+	assert.EqualValues(t, 300, getSubscriptionResetSub(t, 9902).AmountUsed)
 }

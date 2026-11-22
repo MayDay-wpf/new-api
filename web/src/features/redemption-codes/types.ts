@@ -33,12 +33,18 @@ export const redemptionSchema = z.object({
   redeemed_time: z.number(),
   expired_time: z.number(), // 0 for never expires
   used_user_id: z.number(),
+  used_count: z.number().optional(), // times the code has been used
+  max_uses: z.number().optional(), // total usage limit, 0 = unlimited
+  per_user_limit: z.number().optional(), // per-account usage limit, 0 = unlimited
   plan_id: z.number().optional(), // > 0: subscription code granting this plan
+  reset_plan_id: z.number().nullish(), // > 0: reset card for this plan
+  reset_quota_limit_keys: z.array(z.string()).nullish(), // reset card target windows
+  reset_advance_time: z.boolean().nullish(), // reset card advances next reset time
 })
 
 export type Redemption = z.infer<typeof redemptionSchema>
 
-export type RedemptionType = 'quota' | 'subscription'
+export type RedemptionType = 'quota' | 'subscription' | 'reset'
 
 // ============================================================================
 // API Request/Response Types
@@ -78,7 +84,12 @@ export interface RedemptionFormData {
   name: string
   quota: number
   plan_id: number // 0 for balance codes
+  reset_plan_id?: number // > 0 for reset cards
+  reset_quota_limit_keys?: string[]
+  reset_advance_time?: boolean
   expired_time: number
+  max_uses: number // 0 = unlimited total uses
+  per_user_limit: number // 0 = unlimited uses per account
   count?: number // Only for create
   status?: number // Only for status update
 }

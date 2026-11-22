@@ -35,14 +35,25 @@ export function getRedemptionFormSchema(t: TFunction) {
   const msg = getRedemptionFormErrorMessages(t)
   return z
     .object({
-      type: z.enum(['quota', 'subscription']),
+      type: z.enum(['quota', 'subscription', 'reset']),
       name: z
         .string()
         .min(REDEMPTION_VALIDATION.NAME_MIN_LENGTH, msg.NAME_LENGTH_INVALID)
         .max(REDEMPTION_VALIDATION.NAME_MAX_LENGTH, msg.NAME_LENGTH_INVALID),
       quota_dollars: z.number().min(0, t('Quota must be a positive number')),
       plan_id: z.number(),
+      reset_plan_id: z.number(),
+      reset_quota_limit_keys: z.array(z.string()),
+      reset_advance_time: z.boolean(),
       expired_time: z.date().nullable(),
+      max_uses: z
+        .number()
+        .int()
+        .min(0, t('Usage limits cannot be negative')),
+      per_user_limit: z
+        .number()
+        .int()
+        .min(0, t('Usage limits cannot be negative')),
       count: z
         .number()
         .min(REDEMPTION_VALIDATION.COUNT_MIN, msg.COUNT_INVALID)
@@ -57,6 +68,22 @@ export function getRedemptionFormSchema(t: TFunction) {
           message: t('Please select a subscription plan'),
         })
       }
+      if (data.type === 'reset') {
+        if (data.reset_plan_id <= 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['reset_plan_id'],
+            message: t('Please select a subscription plan'),
+          })
+        }
+        if (data.reset_quota_limit_keys.length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['reset_quota_limit_keys'],
+            message: t('Select at least one quota limit to reset'),
+          })
+        }
+      }
     })
 }
 
@@ -65,7 +92,12 @@ export type RedemptionFormValues = {
   name: string
   quota_dollars: number
   plan_id: number
+  reset_plan_id: number
+  reset_quota_limit_keys: string[]
+  reset_advance_time: boolean
   expired_time: Date | null
+  max_uses: number
+  per_user_limit: number
   count?: number
 }
 
@@ -78,7 +110,12 @@ export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
   name: '',
   quota_dollars: 10,
   plan_id: 0,
+  reset_plan_id: 0,
+  reset_quota_limit_keys: [],
+  reset_advance_time: true,
   expired_time: null,
+  max_uses: 1,
+  per_user_limit: 1,
   count: 1,
 }
 
@@ -93,13 +130,19 @@ export function transformFormDataToPayload(
   data: RedemptionFormValues
 ): RedemptionFormData {
   const isSubscription = data.type === 'subscription'
+  const isReset = data.type === 'reset'
   return {
     name: data.name,
-    quota: isSubscription ? 0 : parseQuotaFromDollars(data.quota_dollars),
+    quota: isSubscription || isReset ? 0 : parseQuotaFromDollars(data.quota_dollars),
     plan_id: isSubscription ? data.plan_id : 0,
+    reset_plan_id: isReset ? data.reset_plan_id : 0,
+    reset_quota_limit_keys: isReset ? data.reset_quota_limit_keys : [],
+    reset_advance_time: isReset ? data.reset_advance_time : false,
     expired_time: data.expired_time
       ? Math.floor(data.expired_time.getTime() / 1000)
       : 0,
+    max_uses: data.max_uses,
+    per_user_limit: data.per_user_limit,
     count: data.count || 1,
   }
 }
@@ -111,18 +154,30 @@ export function transformRedemptionToFormDefaults(
   redemption: Redemption
 ): RedemptionFormValues {
   const planId = redemption.plan_id ?? 0
+  const resetPlanId = redemption.reset_plan_id ?? 0
+  let type: RedemptionType = 'quota'
+  if (resetPlanId > 0) {
+    type = 'reset'
+  } else if (planId > 0) {
+    type = 'subscription'
+  }
   return {
-    type: planId > 0 ? 'subscription' : 'quota',
+    type,
     name: redemption.name,
     quota_dollars:
-      planId > 0
-        ? REDEMPTION_FORM_DEFAULT_VALUES.quota_dollars
-        : quotaUnitsToEditableAmount(redemption.quota),
+      type === 'quota'
+        ? quotaUnitsToEditableAmount(redemption.quota)
+        : REDEMPTION_FORM_DEFAULT_VALUES.quota_dollars,
     plan_id: planId,
+    reset_plan_id: resetPlanId,
+    reset_quota_limit_keys: redemption.reset_quota_limit_keys ?? [],
+    reset_advance_time: redemption.reset_advance_time ?? true,
     expired_time:
       redemption.expired_time > 0
         ? new Date(redemption.expired_time * 1000)
         : null,
+    max_uses: redemption.max_uses ?? 1,
+    per_user_limit: redemption.per_user_limit ?? 1,
     count: 1,
   }
 }

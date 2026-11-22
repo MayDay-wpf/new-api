@@ -329,46 +329,117 @@ func normalizeQuotaLimitsLenient(limits SubscriptionPlanQuotaLimits) Subscriptio
 	return result
 }
 
+var (
+	quotaWindowLocationOnce  sync.Once
+	quotaWindowLocationValue = time.UTC
+)
+
+// quotaWindowLocation returns the timezone used as the reference when a monthly
+// window is rolled forward (its day of month must be taken from somewhere).
+//
+// It must be identical on every node: all nodes share the same subscription
+// rows, so a node whose process timezone differs would compute a different
+// boundary. The timezone is therefore fixed instead of coming from time.Local:
+// SUBSCRIPTION_WINDOW_TIMEZONE (IANA name) selects it and it defaults to UTC.
+// When running several nodes, configure the very same value on all of them.
+func quotaWindowLocation() *time.Location {
+	quotaWindowLocationOnce.Do(func() {
+		name := strings.TrimSpace(common.GetEnvOrDefaultString("SUBSCRIPTION_WINDOW_TIMEZONE", ""))
+		if name == "" {
+			return
+		}
+		loc, err := time.LoadLocation(name)
+		if err != nil {
+			common.SysLog(common.LogText("invalid SUBSCRIPTION_WINDOW_TIMEZONE %q, falling back to UTC: %s", name, err.Error()))
+			return
+		}
+		quotaWindowLocationValue = loc
+	})
+	return quotaWindowLocationValue
+}
+
 // quotaLimitWindow returns the [start, end) unix range of the window that
-// contains now. Calendar windows align to the natural boundary; custom windows
-// tumble from the subscription start.
+// contains now. Every window tumbles forward from the subscription start time
+// instead of aligning to a wall-clock boundary: a weekly window always covers
+// exactly seven days from the moment the subscription was opened, and the next
+// window starts where the previous one ended.
 func quotaLimitWindow(limit SubscriptionPlanQuotaLimit, anchor time.Time, now time.Time) (int64, int64) {
 	switch NormalizeQuotaLimitPeriod(limit.Period) {
-	case SubscriptionResetDaily:
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		return start.Unix(), start.AddDate(0, 0, 1).Unix()
 	case SubscriptionResetWeekly:
-		weekday := int(now.Weekday())
-		if weekday == 0 {
-			weekday = 7
-		}
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).
-			AddDate(0, 0, -(weekday - 1))
-		return start.Unix(), start.AddDate(0, 0, 7).Unix()
+		return tumbleFixedWindow(anchor.Unix(), now.Unix(), 7*86400)
 	case SubscriptionResetMonthly:
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		return start.Unix(), start.AddDate(0, 1, 0).Unix()
+		return tumbleMonthWindow(anchor, now)
 	case SubscriptionResetCustom:
 		window := limit.CustomSeconds
 		if window <= 0 {
 			window = 86400
 		}
-		anchorUnix := anchor.Unix()
-		elapsed := now.Unix() - anchorUnix
-		if elapsed < 0 {
-			elapsed = 0
-		}
-		start := anchorUnix + (elapsed/window)*window
-		return start, start + window
-	default:
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		return start.Unix(), start.AddDate(0, 0, 1).Unix()
+		return tumbleFixedWindow(anchor.Unix(), now.Unix(), window)
+	default: // daily, and unknown periods degrade to a one day window
+		return tumbleFixedWindow(anchor.Unix(), now.Unix(), 86400)
 	}
 }
 
+// tumbleFixedWindow returns the fixed length window that contains now, starting
+// at anchor and repeating every window seconds.
+func tumbleFixedWindow(anchorUnix, nowUnix, window int64) (int64, int64) {
+	if window <= 0 {
+		window = 86400
+	}
+	elapsed := nowUnix - anchorUnix
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	start := anchorUnix + (elapsed/window)*window
+	return start, start + window
+}
+
+// tumbleMonthWindow returns the calendar month window that contains now. Months
+// keep the day of the subscription start (clamped to the last day of shorter
+// months) and are evaluated in quotaWindowLocation so every node agrees.
+func tumbleMonthWindow(anchor time.Time, now time.Time) (int64, int64) {
+	base := anchor.In(quotaWindowLocation())
+	if now.Unix() < base.Unix() {
+		return base.Unix(), addMonthsClamped(base, 1).Unix()
+	}
+	baseYear, baseMonth, _ := base.Date()
+	nowYear, nowMonth, _ := now.In(base.Location()).Date()
+	months := (nowYear-baseYear)*12 + int(nowMonth-baseMonth)
+	if months < 0 {
+		months = 0
+	}
+	for months > 0 {
+		start := addMonthsClamped(base, months)
+		if start.Unix() <= now.Unix() {
+			return start.Unix(), addMonthsClamped(base, months+1).Unix()
+		}
+		months--
+	}
+	return base.Unix(), addMonthsClamped(base, 1).Unix()
+}
+
+// addMonthsClamped adds n calendar months to base, keeping its day of month and
+// clamping to the last day when the target month is shorter (Jan 31 -> Feb 28).
+func addMonthsClamped(base time.Time, n int) time.Time {
+	year, month, day := base.Date()
+	hour, minute, sec := base.Clock()
+	loc := base.Location()
+	target := time.Date(year, month+time.Month(n), 1, hour, minute, sec, 0, loc)
+	lastDay := time.Date(target.Year(), target.Month()+1, 0, hour, minute, sec, 0, loc).Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(target.Year(), target.Month(), day, hour, minute, sec, 0, loc)
+}
+
 // refreshQuotaLimitUsages rebuilds the usage list so it matches the plan's
-// current limits and the windows containing now. Expired windows restart at
-// zero; the returned bool reports whether the persisted value changed.
+// current limits and the windows containing now. A stored window that still
+// covers now keeps its usage even when its recorded boundaries drifted (for
+// example after upgrading from calendar aligned windows), while the boundaries
+// themselves always follow the subscription start; an elapsed window restarts at
+// zero. Shorter windows always accumulate into the longer windows they overlap
+// (see applyQuotaLimitAccumulation). The returned bool reports whether the
+// persisted value changed.
 func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now time.Time) (SubscriptionQuotaLimitUsages, bool) {
 	if sub == nil || plan == nil {
 		return nil, false
@@ -379,30 +450,84 @@ func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now 
 		existing[usage.Key] = usage
 	}
 	anchor := time.Unix(sub.StartTime, 0)
+	nowUnix := now.Unix()
 	result := make(SubscriptionQuotaLimitUsages, 0, len(limits))
-	changed := len(sub.QuotaLimitUsage) != len(limits)
 	for _, limit := range limits {
 		key := limit.Key()
 		start, end := quotaLimitWindow(limit, anchor, now)
 		usage, ok := existing[key]
-		if !ok || usage.WindowStart != start {
+		if !ok || usage.WindowEnd <= usage.WindowStart || usage.WindowEnd <= nowUnix {
+			// A new window (first tracked, unusable range, or the stored one
+			// already elapsed): start counting from zero.
 			usage = SubscriptionQuotaLimitUsage{Key: key, WindowStart: start, WindowEnd: end}
-			changed = true
-		} else if usage.WindowEnd != end {
+		} else {
+			// Still the same window: keep the usage, but follow the boundaries
+			// computed from the subscription start so the next reset time stays
+			// anchored to it even when an older boundary was stored.
+			usage.WindowStart = start
 			usage.WindowEnd = end
-			changed = true
 		}
 		result = append(result, usage)
 	}
+	applyQuotaLimitAccumulation(result)
+	changed := len(sub.QuotaLimitUsage) != len(result)
 	if !changed {
 		for i := range result {
-			if result[i] != sub.QuotaLimitUsage[i] {
+			stored, ok := existing[result[i].Key]
+			if !ok || stored != result[i] {
 				changed = true
 				break
 			}
 		}
 	}
 	return result, changed
+}
+
+// quotaLimitUsageSpan returns the length of a tracked window in seconds.
+func quotaLimitUsageSpan(usage SubscriptionQuotaLimitUsage) int64 {
+	return usage.WindowEnd - usage.WindowStart
+}
+
+// quotaLimitUsagesOverlap reports whether two tracked windows share any instant.
+func quotaLimitUsagesOverlap(a, b SubscriptionQuotaLimitUsage) bool {
+	if a.WindowStart <= 0 || b.WindowStart <= 0 ||
+		quotaLimitUsageSpan(a) <= 0 || quotaLimitUsageSpan(b) <= 0 {
+		return false
+	}
+	return a.WindowStart < b.WindowEnd && b.WindowStart < a.WindowEnd
+}
+
+// applyQuotaLimitAccumulation makes every longer window include the usage of the
+// shorter windows it overlaps, so quota consumed inside a 5-hour window also
+// counts toward the weekly window and weekly usage counts toward the monthly
+// window. It only ever raises a longer window, which means a counter that lost
+// usage (for example after a node ran with a different timezone) heals itself
+// instead of reporting less usage than one of its own sub-windows.
+func applyQuotaLimitAccumulation(usages SubscriptionQuotaLimitUsages) bool {
+	changed := false
+	for {
+		raised := false
+		for i := range usages {
+			for j := range usages {
+				if i == j || usages[j].Used <= usages[i].Used {
+					continue
+				}
+				if quotaLimitUsageSpan(usages[i]) <= quotaLimitUsageSpan(usages[j]) {
+					continue
+				}
+				if !quotaLimitUsagesOverlap(usages[i], usages[j]) {
+					continue
+				}
+				usages[i].Used = usages[j].Used
+				raised = true
+			}
+		}
+		if !raised {
+			break
+		}
+		changed = true
+	}
+	return changed
 }
 
 func applyQuotaLimitUsage(usages SubscriptionQuotaLimitUsages, delta int64) {
@@ -570,16 +695,36 @@ func redemptionReservesStock(r *Redemption) bool {
 	return r.ExpiredTime == 0 || r.ExpiredTime >= common.GetTimestamp()
 }
 
+// redemptionReservedSlotsExpr is the SQL expression for how many plan stock slots
+// one redemption code still reserves. Codes with a total usage limit reserve their
+// remaining uses; unlimited codes reserve one slot.
+const redemptionReservedSlotsExpr = "CASE WHEN max_uses > 0 THEN CASE WHEN max_uses > used_count THEN max_uses - used_count ELSE 0 END ELSE 1 END"
+
+// redemptionReservedSlotCount mirrors redemptionReservedSlotsExpr for a single code.
+func redemptionReservedSlotCount(r *Redemption) int {
+	if !redemptionReservesStock(r) {
+		return 0
+	}
+	if r.MaxUses > 0 {
+		return max(r.MaxUses-r.UsedCount, 0)
+	}
+	return 1
+}
+
 func countSubscriptionPlanReservedRedemptions(db *gorm.DB, planId int, excludeRedemptionId int) (int64, error) {
-	var count int64
+	var result struct {
+		Total int64
+	}
 	query := redemptionReservesStockQuery(db).Where("plan_id = ?", planId)
 	if excludeRedemptionId > 0 {
 		query = query.Where("id <> ?", excludeRedemptionId)
 	}
-	if err := query.Count(&count).Error; err != nil {
+	if err := query.
+		Select("COALESCE(SUM(" + redemptionReservedSlotsExpr + "), 0) AS total").
+		Scan(&result).Error; err != nil {
 		return 0, err
 	}
-	return count, nil
+	return result.Total, nil
 }
 
 // checkSubscriptionPlanStock compares stock_total (read from the database, bypassing the
@@ -652,7 +797,7 @@ func FillSubscriptionPlanStockSold(plans []SubscriptionPlan) error {
 		Cnt    int64
 	}
 	if err := redemptionReservesStockQuery(DB).
-		Select("plan_id, COUNT(*) AS cnt").
+		Select("plan_id, COALESCE(SUM("+redemptionReservedSlotsExpr+"), 0) AS cnt").
 		Where("plan_id IN ?", ids).
 		Group("plan_id").
 		Scan(&reservedRows).Error; err != nil {
@@ -767,14 +912,65 @@ type SubscriptionSummary struct {
 	Subscription *UserSubscription `json:"subscription"`
 }
 
+// SubscriptionResetScope selects the quota counters an administrative reset
+// clears. ResetTotal clears the lifetime AmountUsed counter; LimitKeys lists the
+// independent quota windows (SubscriptionPlanQuotaLimit.Key) to clear. A nil
+// scope keeps the legacy behaviour: every counter of the plan is reset.
+type SubscriptionResetScope struct {
+	ResetTotal bool     `json:"reset_total"`
+	LimitKeys  []string `json:"limit_keys"`
+}
+
 type SubscriptionResetResult struct {
-	PlanId           int    `json:"plan_id"`
-	MatchedCount     int    `json:"matched_count"`
-	ResetCount       int    `json:"reset_count"`
-	UserCount        int    `json:"user_count"`
-	AdvanceResetTime bool   `json:"advance_reset_time"`
-	PlanTitle        string `json:"-"`
-	AffectedUserIds  []int  `json:"-"`
+	PlanId           int      `json:"plan_id"`
+	MatchedCount     int      `json:"matched_count"`
+	ResetCount       int      `json:"reset_count"`
+	UserCount        int      `json:"user_count"`
+	AdvanceResetTime bool     `json:"advance_reset_time"`
+	ResetTotal       bool     `json:"reset_total"`
+	ResetLimitKeys   []string `json:"reset_limit_keys"`
+	PlanTitle        string   `json:"-"`
+	AffectedUserIds  []int    `json:"-"`
+}
+
+// normalizeResetScope resolves nil to the full scope and validates that every
+// requested window still exists in the plan's current configuration, so a stale
+// dialog cannot silently reset nothing.
+func normalizeResetScope(plan *SubscriptionPlan, scope *SubscriptionResetScope) (*SubscriptionResetScope, error) {
+	if plan == nil {
+		return nil, errors.New("invalid plan")
+	}
+	available := normalizeQuotaLimitsLenient(plan.QuotaLimits)
+	allKeys := make([]string, 0, len(available))
+	known := make(map[string]struct{}, len(available))
+	for _, limit := range available {
+		key := limit.Key()
+		allKeys = append(allKeys, key)
+		known[key] = struct{}{}
+	}
+	if scope == nil {
+		return &SubscriptionResetScope{ResetTotal: true, LimitKeys: allKeys}, nil
+	}
+	result := &SubscriptionResetScope{ResetTotal: scope.ResetTotal}
+	seen := make(map[string]struct{}, len(scope.LimitKeys))
+	for _, rawKey := range scope.LimitKeys {
+		key := strings.TrimSpace(rawKey)
+		if key == "" {
+			continue
+		}
+		if _, ok := known[key]; !ok {
+			return nil, common.NewMessage("Selected quota limit is no longer configured for this plan")
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result.LimitKeys = append(result.LimitKeys, key)
+	}
+	if !result.ResetTotal && len(result.LimitKeys) == 0 {
+		return nil, common.NewMessage("Select at least one quota limit to reset")
+	}
+	return result, nil
 }
 
 func calcPlanEndTime(start time.Time, plan *SubscriptionPlan) (int64, error) {
@@ -820,25 +1016,18 @@ func calcNextResetTime(base time.Time, plan *SubscriptionPlan, endUnix int64) in
 	if period == SubscriptionResetNever {
 		return 0
 	}
+	// The reset cycle follows the subscription instead of a wall-clock boundary:
+	// exactly one period is added to base (the subscription start or the previous
+	// reset), so the next reset always lands one period after the subscription
+	// was opened rather than at the next midnight / Monday / month start.
 	var next time.Time
 	switch period {
 	case SubscriptionResetDaily:
-		next = time.Date(base.Year(), base.Month(), base.Day(), 0, 0, 0, 0, base.Location()).
-			AddDate(0, 0, 1)
+		next = base.Add(24 * time.Hour)
 	case SubscriptionResetWeekly:
-		// Align to next Monday 00:00
-		weekday := int(base.Weekday()) // Sunday=0
-		// Convert to Monday=1..Sunday=7
-		if weekday == 0 {
-			weekday = 7
-		}
-		daysUntil := 8 - weekday
-		next = time.Date(base.Year(), base.Month(), base.Day(), 0, 0, 0, 0, base.Location()).
-			AddDate(0, 0, daysUntil)
+		next = base.Add(7 * 24 * time.Hour)
 	case SubscriptionResetMonthly:
-		// Align to first day of next month 00:00
-		next = time.Date(base.Year(), base.Month(), 1, 0, 0, 0, 0, base.Location()).
-			AddDate(0, 1, 0)
+		next = addMonthsClamped(base.In(quotaWindowLocation()), 1)
 	case SubscriptionResetCustom:
 		if plan.QuotaResetCustomSeconds <= 0 {
 			return 0
@@ -1528,14 +1717,48 @@ func AdminDeleteUserSubscription(userSubscriptionId int) (*common.Message, error
 	return nil, nil
 }
 
-func resetUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64, advanceResetTime bool) error {
+// resetUserSubscriptionTx clears the counters selected by scope. A nil scope
+// keeps the legacy behaviour of clearing AmountUsed and every configured quota
+// window. Shorter windows contained in a reset window are cleared as well,
+// because their usage accumulates into the longer window and would otherwise
+// restore it on the next refresh.
+func resetUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64, scope *SubscriptionResetScope, advanceResetTime bool) error {
 	if tx == nil || sub == nil || plan == nil {
 		return errors.New("invalid reset args")
 	}
-	sub.AmountUsed = 0
-	if usages, _ := refreshQuotaLimitUsages(sub, plan, time.Unix(now, 0)); len(usages) > 0 {
+	if scope == nil {
+		scope = &SubscriptionResetScope{ResetTotal: true}
+		for _, limit := range normalizeQuotaLimitsLenient(plan.QuotaLimits) {
+			scope.LimitKeys = append(scope.LimitKeys, limit.Key())
+		}
+	}
+	if scope.ResetTotal {
+		sub.AmountUsed = 0
+	}
+	usages, _ := refreshQuotaLimitUsages(sub, plan, time.Unix(now, 0))
+	if len(usages) > 0 {
+		keys := make(map[string]struct{}, len(scope.LimitKeys))
+		for _, key := range scope.LimitKeys {
+			keys[key] = struct{}{}
+		}
+		resetWindows := make(SubscriptionQuotaLimitUsages, 0, len(usages))
 		for i := range usages {
-			usages[i].Used = 0
+			if _, ok := keys[usages[i].Key]; ok {
+				usages[i].Used = 0
+				resetWindows = append(resetWindows, usages[i])
+			}
+		}
+		for i := range usages {
+			if usages[i].Used == 0 {
+				continue
+			}
+			for _, reset := range resetWindows {
+				if quotaLimitUsageSpan(usages[i]) < quotaLimitUsageSpan(reset) &&
+					quotaLimitUsagesOverlap(usages[i], reset) {
+					usages[i].Used = 0
+					break
+				}
+			}
 		}
 		sub.QuotaLimitUsage = usages
 	} else {
@@ -1553,7 +1776,50 @@ func resetUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *Subscript
 	return tx.Save(sub).Error
 }
 
-func buildSubscriptionResetResult(plan *SubscriptionPlan, subs []UserSubscription, advanceResetTime bool) *SubscriptionResetResult {
+// resetUserSubscriptionLimitKeysTx clears the usage of the selected quota
+// windows of one subscription and leaves the lifetime total and every other
+// window untouched. When advanceResetTime is true the next automatic reset time
+// is recalculated from now, matching the admin reset behaviour.
+func resetUserSubscriptionLimitKeysTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, now int64, limitKeys []string, advanceResetTime bool) error {
+	if tx == nil || sub == nil || plan == nil {
+		return errors.New("invalid reset args")
+	}
+	if len(limitKeys) == 0 {
+		return common.NewMessage("Select at least one quota limit to reset")
+	}
+	return resetUserSubscriptionTx(tx, sub, plan, now, &SubscriptionResetScope{LimitKeys: limitKeys}, advanceResetTime)
+}
+
+// resetUserSubscriptionsByLimitKeysTx resets the selected windows of every
+// active subscription the user holds for the plan. It fails (so the caller's
+// transaction rolls back, keeping the reset card unused) when no active
+// subscription matches.
+func resetUserSubscriptionsByLimitKeysTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, now int64, limitKeys []string, advanceResetTime bool) (*SubscriptionResetResult, error) {
+	if tx == nil || plan == nil {
+		return nil, errors.New("invalid reset args")
+	}
+	if len(limitKeys) == 0 {
+		return nil, common.NewMessage("Select at least one quota limit to reset")
+	}
+	var subs []UserSubscription
+	if err := lockForUpdate(tx).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, plan.Id, "active", now).
+		Order("end_time asc, id asc").
+		Find(&subs).Error; err != nil {
+		return nil, err
+	}
+	if len(subs) == 0 {
+		return nil, common.NewMessage("You have no active subscription for this plan, so this reset card cannot be used")
+	}
+	for i := range subs {
+		if err := resetUserSubscriptionLimitKeysTx(tx, &subs[i], plan, now, limitKeys, advanceResetTime); err != nil {
+			return nil, err
+		}
+	}
+	return buildSubscriptionResetResult(plan, subs, &SubscriptionResetScope{LimitKeys: limitKeys}, advanceResetTime), nil
+}
+
+func buildSubscriptionResetResult(plan *SubscriptionPlan, subs []UserSubscription, scope *SubscriptionResetScope, advanceResetTime bool) *SubscriptionResetResult {
 	userIds := make([]int, 0, len(subs))
 	seenUsers := make(map[int]struct{}, len(subs))
 	for _, sub := range subs {
@@ -1563,7 +1829,7 @@ func buildSubscriptionResetResult(plan *SubscriptionPlan, subs []UserSubscriptio
 		seenUsers[sub.UserId] = struct{}{}
 		userIds = append(userIds, sub.UserId)
 	}
-	return &SubscriptionResetResult{
+	result := &SubscriptionResetResult{
 		PlanId:           plan.Id,
 		MatchedCount:     len(subs),
 		ResetCount:       len(subs),
@@ -1572,9 +1838,14 @@ func buildSubscriptionResetResult(plan *SubscriptionPlan, subs []UserSubscriptio
 		PlanTitle:        plan.Title,
 		AffectedUserIds:  userIds,
 	}
+	if scope != nil {
+		result.ResetTotal = scope.ResetTotal
+		result.ResetLimitKeys = append([]string{}, scope.LimitKeys...)
+	}
+	return result
 }
 
-func adminResetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, now int64, advanceResetTime bool) (*SubscriptionResetResult, error) {
+func adminResetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, now int64, scope *SubscriptionResetScope, advanceResetTime bool) (*SubscriptionResetResult, error) {
 	if tx == nil || plan == nil {
 		return nil, errors.New("invalid reset args")
 	}
@@ -1589,14 +1860,14 @@ func adminResetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *Subscrip
 		return nil, common.NewMessage("This user has no active subscription to this plan")
 	}
 	for i := range subs {
-		if err := resetUserSubscriptionTx(tx, &subs[i], plan, now, advanceResetTime); err != nil {
+		if err := resetUserSubscriptionTx(tx, &subs[i], plan, now, scope, advanceResetTime); err != nil {
 			return nil, err
 		}
 	}
-	return buildSubscriptionResetResult(plan, subs, advanceResetTime), nil
+	return buildSubscriptionResetResult(plan, subs, scope, advanceResetTime), nil
 }
 
-func adminResetPlanSubscriptionsTx(tx *gorm.DB, plan *SubscriptionPlan, now int64, advanceResetTime bool) (*SubscriptionResetResult, error) {
+func adminResetPlanSubscriptionsTx(tx *gorm.DB, plan *SubscriptionPlan, now int64, scope *SubscriptionResetScope, advanceResetTime bool) (*SubscriptionResetResult, error) {
 	if tx == nil || plan == nil {
 		return nil, errors.New("invalid reset args")
 	}
@@ -1608,14 +1879,17 @@ func adminResetPlanSubscriptionsTx(tx *gorm.DB, plan *SubscriptionPlan, now int6
 		return nil, err
 	}
 	for i := range subs {
-		if err := resetUserSubscriptionTx(tx, &subs[i], plan, now, advanceResetTime); err != nil {
+		if err := resetUserSubscriptionTx(tx, &subs[i], plan, now, scope, advanceResetTime); err != nil {
 			return nil, err
 		}
 	}
-	return buildSubscriptionResetResult(plan, subs, advanceResetTime), nil
+	return buildSubscriptionResetResult(plan, subs, scope, advanceResetTime), nil
 }
 
-func AdminResetUserSubscriptionsByPlan(userId int, planId int, advanceResetTime bool) (*SubscriptionResetResult, error) {
+// AdminResetUserSubscriptionsByPlan resets the counters selected by scope for
+// every active subscription the user holds for the plan. A nil scope resets
+// every counter (legacy behaviour).
+func AdminResetUserSubscriptionsByPlan(userId int, planId int, scope *SubscriptionResetScope, advanceResetTime bool) (*SubscriptionResetResult, error) {
 	if userId <= 0 || planId <= 0 {
 		return nil, errors.New("invalid userId or planId")
 	}
@@ -1626,7 +1900,11 @@ func AdminResetUserSubscriptionsByPlan(userId int, planId int, advanceResetTime 
 		if err != nil {
 			return err
 		}
-		result, err = adminResetUserSubscriptionsByPlanTx(tx, userId, plan, now, advanceResetTime)
+		normalized, err := normalizeResetScope(plan, scope)
+		if err != nil {
+			return err
+		}
+		result, err = adminResetUserSubscriptionsByPlanTx(tx, userId, plan, now, normalized, advanceResetTime)
 		return err
 	})
 	if err != nil {
@@ -1635,7 +1913,10 @@ func AdminResetUserSubscriptionsByPlan(userId int, planId int, advanceResetTime 
 	return result, nil
 }
 
-func AdminResetPlanSubscriptions(planId int, advanceResetTime bool) (*SubscriptionResetResult, error) {
+// AdminResetPlanSubscriptions resets the counters selected by scope for every
+// active subscription of the plan. A nil scope resets every counter (legacy
+// behaviour).
+func AdminResetPlanSubscriptions(planId int, scope *SubscriptionResetScope, advanceResetTime bool) (*SubscriptionResetResult, error) {
 	if planId <= 0 {
 		return nil, errors.New("invalid planId")
 	}
@@ -1646,7 +1927,11 @@ func AdminResetPlanSubscriptions(planId int, advanceResetTime bool) (*Subscripti
 		if err != nil {
 			return err
 		}
-		result, err = adminResetPlanSubscriptionsTx(tx, plan, now, advanceResetTime)
+		normalized, err := normalizeResetScope(plan, scope)
+		if err != nil {
+			return err
+		}
+		result, err = adminResetPlanSubscriptionsTx(tx, plan, now, normalized, advanceResetTime)
 		return err
 	})
 	if err != nil {

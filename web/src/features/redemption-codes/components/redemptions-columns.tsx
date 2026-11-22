@@ -30,7 +30,11 @@ import {
 } from '@/components/ui/tooltip'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 
-import { REDEMPTION_FILTER_EXPIRED, REDEMPTION_STATUSES } from '../constants'
+import {
+  REDEMPTION_FILTER_EXPIRED,
+  REDEMPTION_STATUS,
+  REDEMPTION_STATUSES,
+} from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
 import type { Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -106,6 +110,20 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
           )
         }
 
+        if (
+          statusValue === REDEMPTION_STATUS.ENABLED &&
+          (redemption.used_count ?? 0) > 0
+        ) {
+          return (
+            <StatusBadge
+              label={t('Partially Used')}
+              variant='info'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          )
+        }
+
         const statusConfig = REDEMPTION_STATUSES[statusValue]
 
         if (!statusConfig) {
@@ -163,6 +181,19 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       accessorKey: 'quota',
       header: t('Quota'),
       cell: ({ row }) => {
+        const resetPlanId = row.original.reset_plan_id ?? 0
+        if (resetPlanId > 0) {
+          return (
+            <StatusBadge
+              label={t('Reset Card: {{plan}}', {
+                plan: getPlanLabel(planTitles, resetPlanId),
+              })}
+              variant='info'
+              copyable={false}
+              className='-ml-1.5'
+            />
+          )
+        }
         const planId = row.original.plan_id ?? 0
         if (planId > 0) {
           return (
@@ -184,6 +215,35 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
             copyable={false}
             className='-ml-1.5'
           />
+        )
+      },
+      size: 120,
+    },
+    {
+      accessorKey: 'used_count',
+      header: t('Usage'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const used = row.original.used_count ?? 0
+        const total = row.original.max_uses ?? 0
+        const perUserLimit = row.original.per_user_limit ?? 0
+        return (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className='cursor-help font-mono text-sm tabular-nums'>
+                  {used} / {total > 0 ? total : t('Unlimited')}
+                </span>
+              }
+            />
+            <TooltipContent>
+              <div className='text-xs'>
+                {t('Per-account limit: {{limit}}', {
+                  limit: perUserLimit > 0 ? perUserLimit : t('Unlimited'),
+                })}
+              </div>
+            </TooltipContent>
+          </Tooltip>
         )
       },
       size: 120,

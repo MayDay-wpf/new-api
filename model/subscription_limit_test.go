@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -197,7 +198,7 @@ func TestAdminResetClearsQuotaLimitUsage(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, PostConsumeUserSubscriptionDelta(sub.Id, 30))
 
-	result, err := AdminResetUserSubscriptionsByPlan(503, plan.Id, false)
+	result, err := AdminResetUserSubscriptionsByPlan(503, plan.Id, nil, false)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, 1, result.ResetCount)
@@ -207,4 +208,180 @@ func TestAdminResetClearsQuotaLimitUsage(t *testing.T) {
 	assert.Zero(t, stored.AmountUsed)
 	require.Len(t, stored.QuotaLimitUsage, 1)
 	assert.Zero(t, stored.QuotaLimitUsage[0].Used)
+}
+
+// quotaWindowTestInstant is 2026-11-22 06:40:00 UTC.
+const quotaWindowTestInstant = int64(1795329600)
+
+func TestQuotaLimitWindowTumblesFromSubscriptionStart(t *testing.T) {
+	anchor := time.Unix(quotaWindowTestInstant, 0)
+	weekly := SubscriptionPlanQuotaLimit{Period: SubscriptionResetWeekly, Amount: 100}
+
+	// The first window starts exactly when the subscription was opened.
+	start, end := quotaLimitWindow(weekly, anchor, anchor.Add(3*time.Hour))
+	assert.Equal(t, anchor.Unix(), start)
+	assert.Equal(t, anchor.Unix()+7*86400, end)
+
+	// Ten days later the window is the second one and it still follows the
+	// subscription start instead of a calendar boundary.
+	start, end = quotaLimitWindow(weekly, anchor, anchor.Add(10*24*time.Hour))
+	assert.Equal(t, anchor.Unix()+7*86400, start)
+	assert.Equal(t, anchor.Unix()+14*86400, end)
+
+	// The boundary does not depend on the timezone of the time values (and thus
+	// not on the process timezone of the node computing it).
+	plus8 := time.FixedZone("UTC+8", 8*3600)
+	localStart, localEnd := quotaLimitWindow(
+		weekly,
+		anchor.In(plus8),
+		anchor.Add(10*24*time.Hour).In(plus8),
+	)
+	assert.Equal(t, start, localStart)
+	assert.Equal(t, end, localEnd)
+
+	daily := SubscriptionPlanQuotaLimit{Period: SubscriptionResetDaily, Amount: 1}
+	start, end = quotaLimitWindow(daily, anchor, anchor.Add(25*time.Hour))
+	assert.Equal(t, anchor.Unix()+86400, start)
+	assert.Equal(t, anchor.Unix()+2*86400, end)
+}
+
+func TestTumbleMonthWindowFollowsSubscriptionStartDay(t *testing.T) {
+	// A subscription opened on Jan 31 keeps its day of month; shorter months
+	// clamp to their last day instead of spilling into the next month.
+	base := time.Date(2027, 1, 31, 9, 30, 0, 0, time.UTC)
+	assert.Equal(t, time.Date(2027, 2, 28, 9, 30, 0, 0, time.UTC), addMonthsClamped(base, 1).UTC())
+	assert.Equal(t, time.Date(2027, 3, 31, 9, 30, 0, 0, time.UTC), addMonthsClamped(base, 2).UTC())
+
+	monthly := SubscriptionPlanQuotaLimit{Period: SubscriptionResetMonthly, Amount: 1}
+	start, end := quotaLimitWindow(monthly, base, time.Date(2027, 2, 28, 9, 30, 0, 0, time.UTC))
+	assert.Equal(t, time.Date(2027, 2, 28, 9, 30, 0, 0, time.UTC), time.Unix(start, 0).UTC())
+	assert.Equal(t, time.Date(2027, 3, 31, 9, 30, 0, 0, time.UTC), time.Unix(end, 0).UTC())
+}
+
+func TestRefreshQuotaLimitUsageKeepsUsageWhenBoundariesDrift(t *testing.T) {
+	// A window that is still running must keep the usage it already recorded even
+	// when its stored boundaries came from another rule (for example the old
+	// calendar aligned windows or a node that ran in another timezone), and the
+	// boundaries must move back to the subscription start grid right away.
+	now := time.Unix(quotaWindowTestInstant, 0)
+	plan := &SubscriptionPlan{
+		QuotaLimits: SubscriptionPlanQuotaLimits{
+			{Period: SubscriptionResetWeekly, Amount: 1000},
+		},
+	}
+	// Boundaries left behind by a UTC+8 node: Sunday 2026-11-15 16:00 UTC until
+	// Sunday 2026-11-22 16:00 UTC.
+	stored := SubscriptionQuotaLimitUsage{
+		Key:         "weekly",
+		Used:        40,
+		WindowStart: 1794758400,
+		WindowEnd:   1795363200,
+	}
+	anchor := now.Add(-10 * 24 * time.Hour)
+	sub := &UserSubscription{
+		StartTime:       anchor.Unix(),
+		QuotaLimitUsage: SubscriptionQuotaLimitUsages{stored},
+	}
+
+	usages, changed := refreshQuotaLimitUsages(sub, plan, now)
+	require.Len(t, usages, 1)
+	assert.EqualValues(t, 40, usages[0].Used)
+	assert.Equal(t, anchor.Unix()+7*86400, usages[0].WindowStart)
+	assert.Equal(t, anchor.Unix()+14*86400, usages[0].WindowEnd)
+	assert.True(t, changed)
+
+	// The boundaries are now stable: refreshing again changes nothing.
+	sub.QuotaLimitUsage = usages
+	usages, changed = refreshQuotaLimitUsages(sub, plan, now.Add(time.Hour))
+	require.Len(t, usages, 1)
+	assert.EqualValues(t, 40, usages[0].Used)
+	assert.False(t, changed)
+
+	// Once the window elapsed the next one follows the subscription start again
+	// and restarts at zero.
+	usages, changed = refreshQuotaLimitUsages(sub, plan, time.Unix(anchor.Unix()+14*86400, 0))
+	require.Len(t, usages, 1)
+	assert.Zero(t, usages[0].Used)
+	assert.Equal(t, anchor.Unix()+14*86400, usages[0].WindowStart)
+	assert.Equal(t, anchor.Unix()+21*86400, usages[0].WindowEnd)
+	assert.True(t, changed)
+}
+
+func TestQuotaLimitUsageAccumulatesIntoLongerWindows(t *testing.T) {
+	truncateTables(t)
+
+	plan := &SubscriptionPlan{
+		Id:            9704,
+		Title:         "Accumulate",
+		PriceAmount:   10,
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   100000,
+		QuotaLimits: SubscriptionPlanQuotaLimits{
+			{Period: SubscriptionResetWeekly, Amount: 1000},
+			{Period: SubscriptionResetCustom, CustomSeconds: 18000, Amount: 100},
+		},
+	}
+	require.NoError(t, DB.Create(plan).Error)
+
+	sub, err := CreateUserSubscriptionFromPlanTx(DB, 504, plan, "test")
+	require.NoError(t, err)
+
+	_, err = PreConsumeUserSubscription("accumulate-1", 504, "gpt-test", 0, 60)
+	require.NoError(t, err)
+
+	// Simulate the 5-hour window rolling over while the weekly window is still
+	// running.
+	var stored UserSubscription
+	require.NoError(t, DB.Where("id = ?", sub.Id).First(&stored).Error)
+	weeklyBefore, fiveHourBefore := int64(0), int64(0)
+	for i := range stored.QuotaLimitUsage {
+		switch stored.QuotaLimitUsage[i].Key {
+		case "weekly":
+			weeklyBefore = stored.QuotaLimitUsage[i].Used
+		case "custom:18000":
+			fiveHourBefore = stored.QuotaLimitUsage[i].Used
+			stored.QuotaLimitUsage[i].WindowStart -= 18000
+			stored.QuotaLimitUsage[i].WindowEnd -= 18000
+		}
+	}
+	require.EqualValues(t, 60, weeklyBefore)
+	require.EqualValues(t, 60, fiveHourBefore)
+	require.NoError(t, DB.Save(&stored).Error)
+
+	_, err = PreConsumeUserSubscription("accumulate-2", 504, "gpt-test", 0, 10)
+	require.NoError(t, err)
+
+	require.NoError(t, DB.Where("id = ?", sub.Id).First(&stored).Error)
+	weekly, fiveHour := int64(0), int64(0)
+	for _, usage := range stored.QuotaLimitUsage {
+		switch usage.Key {
+		case "weekly":
+			weekly = usage.Used
+		case "custom:18000":
+			fiveHour = usage.Used
+		}
+	}
+	// The 5-hour window restarted from zero, but its usage stays accumulated in
+	// the weekly window and the new 10 units are added to both.
+	assert.EqualValues(t, 10, fiveHour)
+	assert.EqualValues(t, 70, weekly)
+}
+
+func TestApplyQuotaLimitAccumulationHealsLongerWindow(t *testing.T) {
+	usages := SubscriptionQuotaLimitUsages{
+		{Key: "monthly", Used: 0, WindowStart: 1793520000, WindowEnd: 1796112000},
+		{Key: "weekly", Used: 0, WindowStart: 1794787200, WindowEnd: 1795392000},
+		{Key: "custom:18000", Used: 120, WindowStart: 1795327200, WindowEnd: 1795345200},
+	}
+
+	require.True(t, applyQuotaLimitAccumulation(usages))
+
+	// 5-hour usage counts toward the week, weekly usage counts toward the month.
+	assert.EqualValues(t, 120, usages[0].Used)
+	assert.EqualValues(t, 120, usages[1].Used)
+	assert.EqualValues(t, 120, usages[2].Used)
+
+	// Nothing left to raise.
+	assert.False(t, applyQuotaLimitAccumulation(usages))
 }

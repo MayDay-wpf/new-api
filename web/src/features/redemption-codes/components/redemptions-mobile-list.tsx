@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ReactNode } from 'react'
 import type { Table as TanstackTable } from '@tanstack/react-table'
 import { Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -115,7 +116,37 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
           redemption.status
         )
         const statusConfig = REDEMPTION_STATUSES[redemption.status]
+        const partiallyUsed =
+          redemption.status === REDEMPTION_STATUS.ENABLED &&
+          (redemption.used_count ?? 0) > 0
         const maskedKey = `${redemption.key.slice(0, 8)}******${redemption.key.slice(-8)}`
+
+        let statusBadge: ReactNode = null
+        if (expired) {
+          statusBadge = (
+            <StatusBadge
+              label={t('Expired')}
+              variant='warning'
+              copyable={false}
+            />
+          )
+        } else if (partiallyUsed) {
+          statusBadge = (
+            <StatusBadge
+              label={t('Partially Used')}
+              variant='info'
+              copyable={false}
+            />
+          )
+        } else if (statusConfig) {
+          statusBadge = (
+            <StatusBadge
+              label={t(statusConfig.labelKey)}
+              variant={statusConfig.variant}
+              copyable={false}
+            />
+          )
+        }
 
         return (
           <div
@@ -136,21 +167,7 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
                   {t('Redemption Code')}
                 </div>
               </div>
-              {expired ? (
-                <StatusBadge
-                  label={t('Expired')}
-                  variant='warning'
-                  copyable={false}
-                />
-              ) : (
-                statusConfig && (
-                  <StatusBadge
-                    label={t(statusConfig.labelKey)}
-                    variant={statusConfig.variant}
-                    copyable={false}
-                  />
-                )
-              )}
+              {statusBadge}
             </div>
 
             <div className='flex min-w-0 items-center justify-between gap-2'>
@@ -176,6 +193,16 @@ export function RedemptionsMobileList(props: RedemptionsMobileListProps) {
                 {(redemption.plan_id ?? 0) > 0
                   ? getPlanLabel(planTitles, redemption.plan_id ?? 0)
                   : formatQuota(redemption.quota)}
+              </span>
+            </div>
+
+            <div className='flex items-center justify-between gap-2 text-xs'>
+              <span className='text-muted-foreground'>{t('Usage')}</span>
+              <span className='truncate font-medium tabular-nums'>
+                {redemption.used_count ?? 0} /{' '}
+                {(redemption.max_uses ?? 0) > 0
+                  ? redemption.max_uses
+                  : t('Unlimited')}
               </span>
             </div>
           </div>
