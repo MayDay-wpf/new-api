@@ -40,6 +40,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { toIntlLocale } from '@/i18n/languages'
 
 import { SettingsPageFormActions } from '../../components/settings-page-context'
 import { SettingsSection } from '../../components/settings-section'
@@ -49,15 +50,17 @@ import {
   getDiscountChannels,
   parseDiscountRules,
   type DiscountRule,
+  type DiscountSchedule,
 } from './api'
 import { DiscountRuleEditorDialog } from './rule-editor-dialog'
+import { getWeekdayLabels } from './weekday-labels'
 
 interface Props {
   rulesJson: string
 }
 
 export function BillingDiscountSection(props: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const updateOption = useUpdateOption()
   const savedRules = useMemo(
     () => parseDiscountRules(props.rulesJson),
@@ -89,6 +92,35 @@ export function BillingDiscountSection(props: Props) {
   }, [channelsQuery.data])
 
   const isDirty = JSON.stringify(rules) !== JSON.stringify(savedRules)
+
+  const weekdayLabels = useMemo(
+    () =>
+      getWeekdayLabels(toIntlLocale(i18n.resolvedLanguage || i18n.language)),
+    [i18n.language, i18n.resolvedLanguage]
+  )
+
+  function describeSchedule(schedule: DiscountSchedule | null): string {
+    if (!schedule) return t('Always active')
+    const time =
+      schedule.start_time && schedule.end_time
+        ? `${schedule.start_time}–${schedule.end_time}`
+        : ''
+    if (schedule.month_days.length > 0) {
+      const days = schedule.month_days.join(', ')
+      return time
+        ? t('Monthly on day {{days}}, {{time}}', { days, time })
+        : t('Monthly on day {{days}}', { days })
+    }
+    if (schedule.weekdays.length > 0) {
+      const days = schedule.weekdays
+        .map((day) => weekdayLabels[day] ?? String(day))
+        .join(', ')
+      return time
+        ? t('Weekly on {{days}}, {{time}}', { days, time })
+        : t('Weekly on {{days}}', { days })
+    }
+    return time ? t('Daily {{time}}', { time }) : t('Always active')
+  }
 
   function openEditor(index: number | null) {
     setEditingIndex(index)
@@ -150,7 +182,7 @@ export function BillingDiscountSection(props: Props) {
       ) : (
         <StaticDataTable
           className='overflow-x-auto'
-          tableClassName='min-w-[1040px] table-fixed [&_th]:px-4 [&_td]:px-4 [&_td]:py-3'
+          tableClassName='min-w-[1180px] table-fixed [&_th]:px-4 [&_td]:px-4 [&_td]:py-3'
           data={indexedRules}
           getRowKey={(item) => `${item.index}:${item.rule.name}`}
           columns={[
@@ -180,6 +212,31 @@ export function BillingDiscountSection(props: Props) {
               className: 'w-28',
               cellClassName: 'tabular-nums',
               cell: (item) => `× ${item.rule.ratio}`,
+            },
+            {
+              id: 'schedule',
+              header: t('Active window'),
+              className: 'w-[18%]',
+              cell: (item) => {
+                const schedule = item.rule.schedule
+                return (
+                  <TruncatedCell
+                    tabIndex={0}
+                    tooltipContent={[
+                      describeSchedule(schedule),
+                      schedule?.timezone
+                        ? t('Timezone: {{timezone}}', {
+                            timezone: schedule.timezone,
+                          })
+                        : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join('\n')}
+                  >
+                    {describeSchedule(schedule)}
+                  </TruncatedCell>
+                )
+              },
             },
             {
               id: 'users',

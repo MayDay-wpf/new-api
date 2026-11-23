@@ -1093,6 +1093,84 @@ func CountUserSubscriptionsByPlan(userId int, planId int) (int64, error) {
 	return countActiveUserSubscriptionsByPlan(DB, userId, planId, GetDBTimestamp())
 }
 
+// getRenewableUserSubscriptionTx returns the active, unexpired subscription of
+// the same plan that a new purchase extends. Buying a plan the user already
+// holds renews that subscription: its validity is prolonged instead of opening
+// a second row, so the plan's stock is not consumed again.
+func getRenewableUserSubscriptionTx(db *gorm.DB, userId int, planId int, now int64) (*UserSubscription, error) {
+	if db == nil {
+		db = DB
+	}
+	var sub UserSubscription
+	err := lockForUpdate(db).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, planId, "active", now).
+		Order("end_time desc, id desc").
+		First(&sub).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &sub, nil
+}
+
+// isUserSubscriptionRenewalTx reports whether the user already holds an active,
+// unexpired subscription of the plan. It only reads, so callers can use it
+// before they decide whether a stock / purchase-limit check is required.
+func isUserSubscriptionRenewalTx(db *gorm.DB, userId int, planId int) (bool, error) {
+	if db == nil {
+		db = DB
+	}
+	if userId <= 0 || planId <= 0 {
+		return false, nil
+	}
+	var count int64
+	if err := db.Model(&UserSubscription{}).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, planId, "active", GetDBTimestamp()).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// IsUserSubscriptionRenewal reports whether buying planId for userId renews an
+// existing active subscription. Renewals neither consume a plan stock slot nor
+// count against MaxPurchasePerUser.
+func IsUserSubscriptionRenewal(userId int, planId int) (bool, error) {
+	return isUserSubscriptionRenewalTx(DB, userId, planId)
+}
+
+// CheckSubscriptionPurchaseAllowed validates plan stock and the per-user
+// purchase limit before a payment order is created. A renewal skips both
+// checks: it extends the existing subscription and therefore takes no new stock
+// slot.
+func CheckSubscriptionPurchaseAllowed(userId int, plan *SubscriptionPlan) error {
+	if plan == nil || plan.Id <= 0 {
+		return errors.New("invalid plan")
+	}
+	renewal, err := IsUserSubscriptionRenewal(userId, plan.Id)
+	if err != nil {
+		return err
+	}
+	if renewal {
+		return nil
+	}
+	if err := CheckSubscriptionPlanStock(plan.Id); err != nil {
+		return err
+	}
+	if plan.MaxPurchasePerUser > 0 {
+		count, err := CountUserSubscriptionsByPlan(userId, plan.Id)
+		if err != nil {
+			return err
+		}
+		if count >= int64(plan.MaxPurchasePerUser) {
+			return common.NewMessage("Purchase limit for this plan has been reached")
+		}
+	}
+	return nil
+}
+
 func getUserGroupByIdTx(tx *gorm.DB, userId int) (string, error) {
 	if userId <= 0 {
 		return "", errors.New("invalid userId")
@@ -1151,6 +1229,54 @@ func downgradeUserGroupForSubscriptionTx(tx *gorm.DB, sub *UserSubscription, now
 	return target, nil
 }
 
+// renewUserSubscriptionTx prolongs an existing subscription by one plan period
+// (the period starts where the current one ends) and opens a fresh quota cycle:
+// the lifetime usage and every quota window (for example the monthly, weekly and
+// 5-hour limits) restart at zero. No row is inserted, so plan stock is untouched.
+func renewUserSubscriptionTx(tx *gorm.DB, sub *UserSubscription, plan *SubscriptionPlan, periodEndUnix int64) (*UserSubscription, error) {
+	if tx == nil || sub == nil || plan == nil {
+		return nil, errors.New("invalid renewal args")
+	}
+	nowUnix := GetDBTimestamp()
+	now := time.Unix(nowUnix, 0)
+	periodSeconds := periodEndUnix - nowUnix
+	if periodSeconds <= 0 {
+		return nil, errors.New("invalid renewal period")
+	}
+	newEnd := sub.EndTime + periodSeconds
+	updates := map[string]any{
+		"end_time":        newEnd,
+		"amount_used":     0,
+		"last_reset_time": nowUnix,
+		"updated_at":      common.GetTimestamp(),
+	}
+	sub.AmountUsed = 0
+	sub.LastResetTime = nowUnix
+	if plan.TotalAmount > 0 {
+		updates["amount_total"] = plan.TotalAmount
+		sub.AmountTotal = plan.TotalAmount
+	}
+	// Restart every independent quota window: the renewed period starts with a
+	// full allowance for the monthly / weekly / custom windows too.
+	usages, _ := refreshQuotaLimitUsages(sub, plan, now)
+	for i := range usages {
+		usages[i].Used = 0
+	}
+	updates["quota_limit_usage"] = usages
+	sub.QuotaLimitUsage = usages
+	// Restart the legacy single reset cycle from the renewal moment so the next
+	// reset lands one period later and still fits inside the extended validity.
+	nextReset := calcNextResetTime(now, plan, newEnd)
+	updates["next_reset_time"] = nextReset
+	sub.NextResetTime = nextReset
+	if err := tx.Model(&UserSubscription{}).Where("id = ?", sub.Id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	sub.EndTime = newEnd
+	sub.UpdatedAt = common.GetTimestamp()
+	return sub, nil
+}
+
 func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, source string) (*UserSubscription, error) {
 	if tx == nil {
 		return nil, errors.New("tx is nil")
@@ -1163,6 +1289,20 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 	}
 	nowUnix := GetDBTimestamp()
 	now := time.Unix(nowUnix, 0)
+	endUnix, err := calcPlanEndTime(now, plan)
+	if err != nil {
+		return nil, err
+	}
+	// A purchase for a plan the user already holds renews that subscription:
+	// the validity is prolonged instead of inserting a new row, so the existing
+	// stock slot keeps covering the user.
+	renewable, err := getRenewableUserSubscriptionTx(tx, userId, plan.Id, nowUnix)
+	if err != nil {
+		return nil, err
+	}
+	if renewable != nil {
+		return renewUserSubscriptionTx(tx, renewable, plan, endUnix)
+	}
 	if plan.MaxPurchasePerUser > 0 {
 		count, err := countActiveUserSubscriptionsByPlan(tx, userId, plan.Id, nowUnix)
 		if err != nil {
@@ -1171,10 +1311,6 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 		if count >= int64(plan.MaxPurchasePerUser) {
 			return nil, common.NewMessage("Purchase limit for this plan has been reached")
 		}
-	}
-	endUnix, err := calcPlanEndTime(now, plan)
-	if err != nil {
-		return nil, err
 	}
 	resetBase := now
 	nextReset := calcNextResetTime(resetBase, plan, endUnix)
@@ -1404,9 +1540,16 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (*common.M
 		if err := lockForUpdate(tx).Select("id").Where("id = ?", userId).First(&userRow).Error; err != nil {
 			return err
 		}
-		// Admin grants also consume plan stock.
-		if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+		// Admin grants also consume plan stock, except when they renew the user's
+		// existing subscription of the same plan (no new slot is taken).
+		renewal, err := isUserSubscriptionRenewalTx(tx, userId, plan.Id)
+		if err != nil {
 			return err
+		}
+		if !renewal {
+			if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+				return err
+			}
 		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "admin")
 		if err == nil {
@@ -1474,9 +1617,16 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 		if requiredQuota > 0 && user.Quota < requiredQuota {
 			return common.NewMessage("Insufficient balance")
 		}
-		// Lock the plan row and count issued subscriptions before charging; fails when sold out.
-		if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+		// Lock the plan row and count issued subscriptions before charging; fails
+		// when sold out. A renewal keeps the user's existing stock slot.
+		renewal, err := isUserSubscriptionRenewalTx(tx, userId, plan.Id)
+		if err != nil {
 			return err
+		}
+		if !renewal {
+			if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
+				return err
+			}
 		}
 		if requiredQuota > 0 {
 			if err := tx.Model(&User{}).Where("id = ?", userId).

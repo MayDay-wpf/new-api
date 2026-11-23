@@ -40,10 +40,6 @@ func SubscriptionRequestWaffoPancakePay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
-	if err := model.CheckSubscriptionPlanStock(plan.Id); err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	if strings.TrimSpace(plan.WaffoPancakeProductId) == "" {
 		common.ApiErrorT(c, "WaffoPancakeProductId is not configured for this plan")
 		return
@@ -67,16 +63,9 @@ func SubscriptionRequestWaffoPancakePay(c *gin.Context) {
 		return
 	}
 
-	if plan.MaxPurchasePerUser > 0 {
-		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if count >= int64(plan.MaxPurchasePerUser) {
-			common.ApiErrorT(c, "Purchase limit for this plan has been reached")
-			return
-		}
+	if err := model.CheckSubscriptionPurchaseAllowed(userId, plan); err != nil {
+		common.ApiError(c, err)
+		return
 	}
 
 	// WAFFO_PANCAKE_SUB- prefix (vs. wallet's WAFFO_PANCAKE-) drives webhook

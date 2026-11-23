@@ -41,10 +41,6 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
-	if err := model.CheckSubscriptionPlanStock(plan.Id); err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	if plan.PriceAmount < 0.01 {
 		common.ApiErrorT(c, "Plan amount is too low")
 		return
@@ -55,16 +51,9 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	}
 
 	userId := c.GetInt("id")
-	if plan.MaxPurchasePerUser > 0 {
-		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if count >= int64(plan.MaxPurchasePerUser) {
-			common.ApiErrorT(c, "Purchase limit for this plan has been reached")
-			return
-		}
+	if err := model.CheckSubscriptionPurchaseAllowed(userId, plan); err != nil {
+		common.ApiError(c, err)
+		return
 	}
 
 	callBackAddress := service.GetCallbackAddress()

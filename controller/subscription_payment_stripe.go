@@ -40,10 +40,6 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		common.ApiErrorT(c, "Subscription plan is not enabled")
 		return
 	}
-	if err := model.CheckSubscriptionPlanStock(plan.Id); err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	if plan.StripePriceId == "" {
 		common.ApiErrorT(c, "StripePriceId is not configured for this plan")
 		return
@@ -68,16 +64,9 @@ func SubscriptionRequestStripePay(c *gin.Context) {
 		return
 	}
 
-	if plan.MaxPurchasePerUser > 0 {
-		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
-		if err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		if count >= int64(plan.MaxPurchasePerUser) {
-			common.ApiErrorT(c, "Purchase limit for this plan has been reached")
-			return
-		}
+	if err := model.CheckSubscriptionPurchaseAllowed(userId, plan); err != nil {
+		common.ApiError(c, err)
+		return
 	}
 
 	reference := fmt.Sprintf("sub-stripe-ref-%d-%d-%s", user.Id, time.Now().UnixMilli(), randstr.String(4))

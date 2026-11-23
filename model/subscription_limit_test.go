@@ -149,10 +149,13 @@ func TestPurchaseLimitCountsOnlyActiveSubscriptions(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, first)
 
-	// An active, unexpired subscription blocks a second purchase.
-	_, err = CreateUserSubscriptionFromPlanTx(DB, 601, plan, "test")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Purchase limit")
+	// Buying the plan again while it is still active renews the existing
+	// subscription: it extends the validity instead of taking a new purchase
+	// slot, so MaxPurchasePerUser does not block it.
+	renewed, err := CreateUserSubscriptionFromPlanTx(DB, 601, plan, "test")
+	require.NoError(t, err)
+	require.Equal(t, first.Id, renewed.Id)
+	assert.Greater(t, renewed.EndTime, first.EndTime)
 
 	count, err := CountUserSubscriptionsByPlan(601, plan.Id)
 	require.NoError(t, err)
@@ -176,6 +179,88 @@ func TestPurchaseLimitCountsOnlyActiveSubscriptions(t *testing.T) {
 	require.NoError(t, DB.Model(&UserSubscription{}).Where("id = ?", second.Id).
 		Update("end_time", GetDBTimestamp()-1).Error)
 	_, err = CreateUserSubscriptionFromPlanTx(DB, 601, plan, "test")
+	require.NoError(t, err)
+}
+
+func TestRenewalKeepsPlanStockSlot(t *testing.T) {
+	truncateTables(t)
+
+	plan := &SubscriptionPlan{
+		Id:            9802,
+		Title:         "Stocked",
+		PriceAmount:   10,
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		StockTotal:    1,
+	}
+	require.NoError(t, DB.Create(plan).Error)
+
+	first, err := CreateUserSubscriptionFromPlanTx(DB, 602, plan, "test")
+	require.NoError(t, err)
+	require.NotNil(t, first)
+
+	// The single stock slot is now taken by user 602.
+	require.ErrorIs(t, CheckSubscriptionPlanStock(plan.Id), ErrSubscriptionPlanSoldOut)
+
+	// Renewing the same plan for the same user extends the existing subscription
+	// and needs no extra stock slot, so it succeeds even when sold out.
+	renewal, err := CreateUserSubscriptionFromPlanTx(DB, 602, plan, "test")
+	require.NoError(t, err)
+	require.Equal(t, first.Id, renewal.Id)
+	assert.Greater(t, renewal.EndTime, first.EndTime)
+
+	issued, err := countSubscriptionPlanIssued(DB, plan.Id)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, issued)
+
+	// Another user still cannot take the occupied slot.
+	require.ErrorIs(t, CheckSubscriptionPlanStock(plan.Id), ErrSubscriptionPlanSoldOut)
+}
+
+func TestRenewalResetsQuotaUsage(t *testing.T) {
+	truncateTables(t)
+
+	plan := &SubscriptionPlan{
+		Id:            9803,
+		Title:         "Renew reset",
+		PriceAmount:   10,
+		DurationUnit:  SubscriptionDurationMonth,
+		DurationValue: 1,
+		TotalAmount:   1000,
+		QuotaLimits: SubscriptionPlanQuotaLimits{
+			{Period: SubscriptionResetWeekly, Amount: 300},
+			{Period: SubscriptionResetCustom, CustomSeconds: 18000, Amount: 40},
+		},
+	}
+	require.NoError(t, DB.Create(plan).Error)
+
+	sub, err := CreateUserSubscriptionFromPlanTx(DB, 603, plan, "test")
+	require.NoError(t, err)
+	_, err = PreConsumeUserSubscription("renew-reset-1", 603, "gpt-test", 0, 20)
+	require.NoError(t, err)
+
+	var used UserSubscription
+	require.NoError(t, DB.Where("id = ?", sub.Id).First(&used).Error)
+	require.EqualValues(t, 20, used.AmountUsed)
+
+	renewed, err := CreateUserSubscriptionFromPlanTx(DB, 603, plan, "test")
+	require.NoError(t, err)
+	require.Equal(t, sub.Id, renewed.Id)
+
+	var stored UserSubscription
+	require.NoError(t, DB.Where("id = ?", sub.Id).First(&stored).Error)
+	assert.Greater(t, stored.EndTime, used.EndTime)
+	// The renewal opens a fresh quota cycle: both the lifetime counter and every
+	// window (weekly + 5-hour) restart at zero.
+	assert.Zero(t, stored.AmountUsed)
+	assert.EqualValues(t, plan.TotalAmount, stored.AmountTotal)
+	require.Len(t, stored.QuotaLimitUsage, 2)
+	for _, usage := range stored.QuotaLimitUsage {
+		assert.Zero(t, usage.Used, usage.Key)
+	}
+
+	// The reset allowance is usable right away.
+	_, err = PreConsumeUserSubscription("renew-reset-2", 603, "gpt-test", 0, 20)
 	require.NoError(t, err)
 }
 

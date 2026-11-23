@@ -3,6 +3,7 @@ package operation_setting
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,5 +112,134 @@ func TestValidateBillingDiscountRulesRejectsUnsafeValues(t *testing.T) {
 		{Ratio: 0.5, UAMatch: "regex"},
 	} {
 		assert.Error(t, ValidateBillingDiscountRules([]BillingDiscountRule{rule}))
+	}
+}
+
+func TestBillingDiscountScheduleIsEmpty(t *testing.T) {
+	assert.True(t, (*BillingDiscountSchedule)(nil).IsEmpty())
+	assert.True(t, (&BillingDiscountSchedule{}).IsEmpty())
+	assert.True(t, (&BillingDiscountSchedule{Timezone: " ", StartTime: " "}).IsEmpty())
+	assert.False(t, (&BillingDiscountSchedule{StartTime: "09:00", EndTime: "18:00"}).IsEmpty())
+	assert.False(t, (&BillingDiscountSchedule{Weekdays: []int{1}}).IsEmpty())
+}
+
+func TestBillingDiscountScheduleAlwaysActiveWhenUnset(t *testing.T) {
+	now := time.Date(2026, 11, 23, 3, 15, 0, 0, time.UTC)
+	assert.True(t, (*BillingDiscountSchedule)(nil).IsActiveAt(now))
+	assert.True(t, (&BillingDiscountSchedule{}).IsActiveAt(now))
+}
+
+func TestBillingDiscountScheduleDailyWindow(t *testing.T) {
+	schedule := &BillingDiscountSchedule{Timezone: "UTC", StartTime: "09:00", EndTime: "18:00"}
+	cases := []struct {
+		name string
+		now  time.Time
+		want bool
+	}{
+		{"before start", time.Date(2026, 11, 23, 8, 59, 0, 0, time.UTC), false},
+		{"at start", time.Date(2026, 11, 23, 9, 0, 0, 0, time.UTC), true},
+		{"last minute inside", time.Date(2026, 11, 23, 17, 59, 0, 0, time.UTC), true},
+		{"at end is exclusive", time.Date(2026, 11, 23, 18, 0, 0, 0, time.UTC), false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, schedule.IsActiveAt(tt.now))
+		})
+	}
+}
+
+func TestBillingDiscountScheduleWeeklyOvernightWindow(t *testing.T) {
+	// 2026-11-27 is a Friday, so a Friday 22:00-06:00 window runs into Saturday.
+	schedule := &BillingDiscountSchedule{
+		Timezone:  "UTC",
+		Weekdays:  []int{5},
+		StartTime: "22:00",
+		EndTime:   "06:00",
+	}
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 27, 23, 0, 0, 0, time.UTC)))
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 28, 3, 0, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 28, 6, 0, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 28, 23, 0, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 27, 21, 59, 0, 0, time.UTC)))
+}
+
+func TestBillingDiscountScheduleWeeklyWithoutTimeRange(t *testing.T) {
+	schedule := &BillingDiscountSchedule{Timezone: "UTC", Weekdays: []int{1}}
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 23, 4, 0, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 24, 4, 0, 0, 0, time.UTC)))
+}
+
+func TestBillingDiscountScheduleMonthlyWindow(t *testing.T) {
+	schedule := &BillingDiscountSchedule{
+		Timezone:  "UTC",
+		MonthDays: []int{1, 15},
+		StartTime: "10:00",
+		EndTime:   "12:00",
+	}
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 1, 11, 0, 0, 0, time.UTC)))
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 2, 11, 0, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 15, 12, 30, 0, 0, time.UTC)))
+}
+
+func TestBillingDiscountScheduleTimezone(t *testing.T) {
+	schedule := &BillingDiscountSchedule{
+		Timezone:  "Asia/Shanghai",
+		StartTime: "09:00",
+		EndTime:   "18:00",
+	}
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 23, 1, 0, 0, 0, time.UTC)))
+	assert.True(t, schedule.IsActiveAt(time.Date(2026, 11, 23, 9, 30, 0, 0, time.UTC)))
+	assert.False(t, schedule.IsActiveAt(time.Date(2026, 11, 23, 10, 0, 0, 0, time.UTC)))
+}
+
+func TestBillingDiscountScheduleInvalidStoredWindowIsInactive(t *testing.T) {
+	now := time.Date(2026, 11, 23, 10, 0, 0, 0, time.UTC)
+	assert.False(t, (&BillingDiscountSchedule{StartTime: "09:00"}).IsActiveAt(now))
+	assert.False(t, (&BillingDiscountSchedule{StartTime: "9am", EndTime: "18:00"}).IsActiveAt(now))
+	assert.False(t, (&BillingDiscountSchedule{Timezone: "Mars/Olympus", StartTime: "09:00", EndTime: "18:00"}).IsActiveAt(now))
+}
+
+func TestBillingDiscountRuleRespectsSchedule(t *testing.T) {
+	rule := BillingDiscountRule{
+		Enabled:  true,
+		Ratio:    0.5,
+		UserIds:  []int{7},
+		Schedule: &BillingDiscountSchedule{Timezone: "UTC", StartTime: "09:00", EndTime: "18:00"},
+	}
+	assert.True(t, rule.MatchesAt(7, 0, "", time.Date(2026, 11, 23, 10, 0, 0, 0, time.UTC)))
+	assert.False(t, rule.MatchesAt(7, 0, "", time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)))
+
+	// A rule without a schedule stays unconditional.
+	always := BillingDiscountRule{Enabled: true, Ratio: 0.5, UserIds: []int{7}}
+	assert.True(t, always.MatchesAt(7, 0, "", time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)))
+}
+
+func TestValidateBillingDiscountSchedule(t *testing.T) {
+	valid := []*BillingDiscountSchedule{
+		nil,
+		{},
+		{Timezone: "Asia/Shanghai", Weekdays: []int{0, 6}, StartTime: "00:00", EndTime: "23:59"},
+		{MonthDays: []int{1, 31}, StartTime: "22:00", EndTime: "06:00"},
+	}
+	for _, schedule := range valid {
+		assert.NoError(t, schedule.Validate())
+	}
+
+	invalid := []*BillingDiscountSchedule{
+		{Timezone: "Mars/Olympus"},
+		{Weekdays: []int{7}},
+		{Weekdays: []int{-1}},
+		{MonthDays: []int{0}},
+		{MonthDays: []int{32}},
+		{StartTime: "09:00"},
+		{EndTime: "18:00"},
+		{StartTime: "09:00", EndTime: "09:00"},
+		{StartTime: "24:00", EndTime: "18:00"},
+		{StartTime: "9:0", EndTime: "18:00"},
+		{StartTime: "9am", EndTime: "18:00"},
+	}
+	for _, schedule := range invalid {
+		assert.Error(t, schedule.Validate(), "schedule %+v should be rejected", schedule)
 	}
 }

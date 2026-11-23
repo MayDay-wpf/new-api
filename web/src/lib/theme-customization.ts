@@ -27,7 +27,8 @@ export const THEME_PRESETS = [
   {
     value: 'default',
     name: 'Default',
-    swatches: ['oklch(0.72 0.18 250)', 'oklch(0.7 0.12 280)'],
+    // Cyber glitch: neon cyan (#00e5ff) ↔ hot magenta (#ff2d95).
+    swatches: ['oklch(0.8442 0.1457 209.29)', 'oklch(0.6655 0.2492 357.34)'],
   },
   {
     // Inspired by Anthropic's official brand language: warm cream canvas

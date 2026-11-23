@@ -1,0 +1,4658 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Snow App 是一个桌面编码 Agent 客户端：你描述任务，它自己读代码、改文件、执行命令、查看诊断并验证结果。终端、Git、SSH 与浏览器都在同一个窗口里。"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Snow App · 桌面编码 Agent</title>
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="data:image/png;base64,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"
+    />
+
+    <!--
+      ============================================================================
+        NewAPI 自定义首页（单文件，无外部依赖）
+        --------------------------------------------------------------------------
+        部署：
+          1. 同域部署：把 homepage.html 放进 web/public，重新构建前端与后端
+             （或让 Nginx 直接托管这个文件）
+          2. 后台 → 系统设置 → 站点与品牌 → 系统信息 → 首页内容，填入完整 URL
+             （new-api 只在内容以 http:// 或 https:// 开头时才用 iframe 嵌入）
+          3. 独立域名部署时，把 newApiOrigin 改成你的 new-api 地址
+        预览：homepage.html?theme=dark|light&lang=zh-CN|zh-TW|en
+        语言：?lang 优先 → localStorage(snow-home-lang) → 浏览器语言；
+              new-api 会把主题与语言通过 postMessage 下发，嵌入时自动跟随
+
+        newApiOrigin：NewAPI 站点地址；当前指向 https://kfccrazythursday.com
+        brandName：导航与页脚显示的品牌名
+        wordmark：像素字标，仅支持 A-Z 0-9 - . / 和空格
+        routes：NewAPI 的页面路径，按你的版本改
+        links：站外链接
+      ============================================================================
+    -->
+    <script>
+      window.SNOW_HOME = {
+        newApiOrigin: "https://kfccrazythursday.com",
+        brandName: "Snow App",
+        wordmark: "SNOW APP",
+        refundEmail: "maymay5jace@gmail.com",
+        routes: {
+          signIn: "/sign-in",
+          signUp: "/sign-up",
+          dashboard: "/dashboard",
+          pricing: "/pricing",
+          wallet: "/wallet",
+        },
+        links: {
+          github: "https://github.com/MayDay-wpf/snow-app",
+          releases: "https://github.com/MayDay-wpf/snow-app/releases",
+          docs: "https://github.com/MayDay-wpf/snow-app/tree/main/docs",
+          issues: "https://github.com/MayDay-wpf/snow-app/issues",
+          qq: "https://qm.qq.com/q/avnZQ7gw0M",
+          linuxDo: "https://linux.do",
+        },
+      };
+    </script>
+
+    <script>
+      /* 首页文案词典：zh-CN / zh-TW / en。新增文案时三份都要补。 */
+      window.SNOW_HOME_I18N = {
+        "zh-CN": {
+          meta: {
+            title: "Snow App · 桌面编码 Agent",
+            description:
+              "Snow App 是一个桌面编码 Agent 客户端：你描述任务，它自己读代码、改文件、执行命令、查看诊断并验证结果。终端、Git、SSH 与浏览器都在同一个窗口里。",
+          },
+          a11y: {
+            backTop: "回到顶部",
+            mainNav: "主导航",
+            skip: "跳到主要内容",
+            themeToLight: "切换到浅色模式",
+            themeToDark: "切换到深色模式",
+            openMenu: "打开菜单",
+            closeMenu: "关闭菜单",
+            language: "语言",
+            service: "服务说明",
+            shot: "Snow App 三栏工作区界面示意",
+          },
+          nav: {
+            service: "服务",
+            workspace: "工作台",
+            features: "能力",
+            extend: "扩展与安全",
+            signIn: "登录",
+            console: "控制台",
+          },
+          hero: {
+            title: "你描述任务，<br />Agent 自己动手",
+            description:
+              "Snow App 是桌面编码 Agent 客户端：它自己读代码、改文件、执行命令、查看诊断并验证结果。终端、Git、SSH、浏览器和文件树都在同一个窗口里，每一处改动都能当场审阅、授权和回滚。",
+            console: "进入控制台",
+            signIn: "登录 / 注册",
+            download: "下载 Snow App",
+          },
+          service: {
+            note: "服务说明 · 充值 / 订阅 / 退款 / 数据策略",
+            perMonth: "/ 月",
+            goReset: "每 5 小时重置 $20 额度",
+            goWeekly: "每周重置 $140 额度",
+            proReset: "每 5 小时重置 $40 额度",
+            proWeekly: "每周重置 $300 额度",
+            subscribe: "立即订阅 →",
+            reliabilityTitle: "稳定、零数据保存、高效",
+            reliabilityDesc: "长期在线，请求不做额外留存。",
+            topupTitle: "充值比例 1:1",
+            topupDesc: "充值多少，额度到账多少。",
+            refundTitle: "不限期无理由退余额",
+            refundPrefix: "退款请发送邮件至",
+          },
+          workspace: {
+            title: "Agent 的感官与手脚，<br />都在一个窗口里",
+            description:
+              "左侧是会话与项目，中间是 Agent 的对话与工具调用，右侧是它正在使用的浏览器、终端与 Git。这些面板不是并排的工具，而是同一份会话上下文的一部分。",
+          },
+          demo: {
+            sessionsLabel: "会话",
+            mcp: "MCP 3 已连接",
+            s1Title: "users 接口分页校验",
+            s1Meta: "snow-cloud · 刚刚",
+            s2Title: "修复 SSH 断线重连",
+            s2Meta: "snow-app · 2 小时前",
+            s3Title: "插件市场加筛选",
+            s3Meta: "plugin-store · 昨天",
+            s4Title: "重构团队面板",
+            s4Meta: "snow-app · 3 天前",
+            user: "把 users 接口补上分页参数校验，顺手加一组用例，最后按仓库规范提交。",
+            terminal: "终端",
+            browser: "浏览器",
+            branch: "新建分支 feat/users-pagination",
+            browserStep: "打开 /console/users 核对分页",
+            reply:
+              "已在 <code>UsersController</code> 上补好 <code>page/pageSize</code> 校验，新增 3 个用例并全部通过，已提交到 <code>feat/users-pagination</code>",
+            input: "继续输入指令，或拖入文件 / 截图…",
+            pending: "待提交",
+            memory: "项目记忆已注入",
+          },
+          features: {
+            title: "编码能力与扩展",
+            description:
+              "核心是一条编码循环：读代码、改文件、执行命令、查看诊断、验证结果。终端、检索与 Git 都在循环之内，技能与子代理按需接入。",
+            item1: {
+              title: "编码循环",
+              desc: "你描述任务，Agent 自己读代码、定位改动点、写文件、跑命令、看诊断，直到结果被验证——中间不用你搬运上下文。",
+            },
+            item2: {
+              title: "代码库检索与诊断",
+              desc: "先检索项目再动手：代码库索引帮它找到真正相关的位置，LSP 诊断让类型与编译错误当场暴露。",
+            },
+            item3: {
+              title: "集成终端",
+              desc: "真实 PTY 终端，多标签、工作目录跟随项目。Agent 在这里跑构建和测试，把输出接进下一轮推理。",
+            },
+            item4: {
+              title: "Git 面板与改动审阅",
+              desc: "状态、暂存、提交、分支与差异一屏可见，每处改动都能审阅、授权和回滚；提交前你说了算。",
+            },
+            item5: {
+              title: "SSH 远程工作区",
+              desc: "把远程主机挂成工作区，文件浏览、终端与 Agent 会话都跑在远端上下文里，本地只留一个窗口。",
+            },
+            item6: {
+              title: "内置浏览器",
+              desc: "Agent 可以打开页面、抓取内容、按步骤操作界面，再把结果带回对话——验证 Web 改动不用你截图复述。",
+            },
+            metric1: {
+              value: "1 个循环",
+              label: "读代码 · 改文件 · 执行命令 · 验证结果",
+            },
+            metric2: {
+              value: "同窗口",
+              label: "终端、Git、SSH、浏览器都是 Agent 的手脚",
+            },
+            metric3: { value: "3 端", label: "macOS / Windows / Linux" },
+            metric4: { value: "MIT", label: "开源，可自建可魔改" },
+            agentsTitle: "Agent 与协作",
+            agentsDesc:
+              "技能、MCP 服务器与子代理扩展的是同一个 Agent；定时任务可以编排成多节点工作流，项目记忆按项目持久保存并自动注入。",
+            collab1: "子代理并行执行，主会话保持干净",
+            collab2: "Goal 模式让长任务自主推进，按预算收敛",
+            collab3: "Skills 技能与插件按需接入",
+            collab4: "Hooks 生命周期钩子，串联你的脚本",
+            collab5: "定时任务与多节点工作流",
+            collab6: "项目记忆按项目持久保存并自动注入",
+            collab7: "团队协作",
+            securityTitle: "安全与体验",
+            securityDesc:
+              "工具授权与隐私脱敏决定 Agent 能做什么、能看到什么；应用锁默认关闭，只遮盖界面而不加密磁盘数据。",
+            security1: "工具授权决定 Agent 能做什么",
+            security2: "隐私脱敏决定 Agent 能看到什么",
+            security3: "应用锁遮盖界面，PIN 仅存加盐哈希",
+            security4: "检查点与回滚，改动随时可退",
+            security5: "手机远控，继续当前会话",
+            security6: "用量与日志，每次工具调用都有记录",
+          },
+          cta: {
+            title: "现在就让 Agent<br />接手第一个任务",
+            description:
+              "下载后接上你已有的模型与项目即可开始。任务、工具调用与改动记录都留在本机，每一步都能审阅、授权和回滚。",
+            console: "进入控制台",
+            signIn: "登录 / 注册",
+            pricing: "API 定价",
+            download: "下载 Snow App",
+            source: "查看源码",
+          },
+          footer: {
+            blurb:
+              "桌面编码 Agent。你描述任务，它自己读代码、改文件、执行命令并验证结果；终端、Git、SSH 与浏览器都在同一个窗口里。",
+            note: "Snow Cloud 控制台 · 稳定、零数据保存、高效 · 充值比例 1:1",
+            product: "产品",
+            resources: "资源",
+            account: "账户",
+            service: "服务说明",
+            workspace: "工作台",
+            features: "能力清单",
+            extend: "扩展与安全",
+            docs: "使用文档",
+            github: "GitHub 仓库",
+            issues: "问题反馈",
+            changelog: "更新日志",
+            console: "进入控制台",
+            signIn: "登录",
+            signUp: "注册",
+            pricing: "API 定价",
+            refundPrefix: "退款联系",
+          },
+        },
+
+        "zh-TW": {
+          meta: {
+            title: "Snow App · 桌面編碼 Agent",
+            description:
+              "Snow App 是一個桌面編碼 Agent 用戶端：你描述任務，它自己讀程式碼、改檔案、執行指令、查看診斷並驗證結果。終端機、Git、SSH 與瀏覽器都在同一個視窗裡。",
+          },
+          a11y: {
+            backTop: "回到頂部",
+            mainNav: "主導覽",
+            skip: "跳至主要內容",
+            themeToLight: "切換到淺色模式",
+            themeToDark: "切換到深色模式",
+            openMenu: "開啟選單",
+            closeMenu: "關閉選單",
+            language: "語言",
+            service: "服務說明",
+            shot: "Snow App 三欄工作區介面示意",
+          },
+          nav: {
+            service: "服務",
+            workspace: "工作台",
+            features: "能力",
+            extend: "擴充與安全",
+            signIn: "登入",
+            console: "主控台",
+          },
+          hero: {
+            title: "你描述任務，<br />Agent 自己動手",
+            description:
+              "Snow App 是桌面編碼 Agent 用戶端：它自己讀程式碼、改檔案、執行指令、查看診斷並驗證結果。終端機、Git、SSH、瀏覽器和檔案樹都在同一個視窗裡，每一處變更都能當場審閱、授權和回滾。",
+            console: "進入主控台",
+            signIn: "登入 / 註冊",
+            download: "下載 Snow App",
+          },
+          service: {
+            note: "服務說明 · 儲值 / 訂閱 / 退款 / 資料策略",
+            perMonth: "/ 月",
+            goReset: "每 5 小時重置 $20 額度",
+            goWeekly: "每週重置 $140 額度",
+            proReset: "每 5 小時重置 $40 額度",
+            proWeekly: "每週重置 $300 額度",
+            subscribe: "立即訂閱 →",
+            reliabilityTitle: "穩定、零資料保存、高效",
+            reliabilityDesc: "長期在線，請求不做額外留存。",
+            topupTitle: "儲值比例 1:1",
+            topupDesc: "儲值多少，額度到帳多少。",
+            refundTitle: "不限期限無理由退餘額",
+            refundPrefix: "退款請寄送電子郵件至",
+          },
+          workspace: {
+            title: "Agent 的感官與手腳，<br />都在一個視窗裡",
+            description:
+              "左側是會話與專案，中間是 Agent 的對話與工具呼叫，右側是它正在使用的瀏覽器、終端機與 Git。這些面板不是並排的工具，而是同一份會話情境的一部分。",
+          },
+          demo: {
+            sessionsLabel: "會話",
+            mcp: "MCP 3 已連線",
+            s1Title: "users 介面分頁驗證",
+            s1Meta: "snow-cloud · 剛剛",
+            s2Title: "修復 SSH 斷線重連",
+            s2Meta: "snow-app · 2 小時前",
+            s3Title: "外掛市集加篩選",
+            s3Meta: "plugin-store · 昨天",
+            s4Title: "重構團隊面板",
+            s4Meta: "snow-app · 3 天前",
+            user: "把 users 介面補上分頁參數驗證，順手加一組測試案例，最後依儲存庫規範提交。",
+            terminal: "終端機",
+            browser: "瀏覽器",
+            branch: "建立分支 feat/users-pagination",
+            browserStep: "開啟 /console/users 核對分頁",
+            reply:
+              "已在 <code>UsersController</code> 上補好 <code>page/pageSize</code> 驗證，新增 3 個測試案例並全部通過，已提交到 <code>feat/users-pagination</code>",
+            input: "繼續輸入指令，或拖入檔案 / 截圖…",
+            pending: "待提交",
+            memory: "專案記憶已注入",
+          },
+          features: {
+            title: "編碼能力與擴充",
+            description:
+              "核心是一條編碼循環：讀程式碼、改檔案、執行指令、查看診斷、驗證結果。終端機、檢索與 Git 都在循環之內，技能與子代理依需求接入。",
+            item1: {
+              title: "編碼循環",
+              desc: "你描述任務，Agent 自己讀程式碼、定位變更點、寫檔案、執行指令、看診斷，直到結果被驗證——中間不用你搬運情境。",
+            },
+            item2: {
+              title: "程式碼庫檢索與診斷",
+              desc: "先檢索專案再動手：程式碼庫索引幫它找到真正相關的位置，LSP 診斷讓型別與編譯錯誤當場浮現。",
+            },
+            item3: {
+              title: "整合式終端機",
+              desc: "真實 PTY 終端機，多分頁、工作目錄跟隨專案。Agent 在這裡執行建置與測試，把輸出接進下一輪推理。",
+            },
+            item4: {
+              title: "Git 面板與變更審閱",
+              desc: "狀態、暫存、提交、分支與差異一屏可見，每處變更都能審閱、授權和回滾；提交前由你決定。",
+            },
+            item5: {
+              title: "SSH 遠端工作區",
+              desc: "把遠端主機掛載成工作區，檔案瀏覽、終端機與 Agent 會話都跑在遠端情境裡，本機只留一個視窗。",
+            },
+            item6: {
+              title: "內建瀏覽器",
+              desc: "Agent 可以開啟頁面、擷取內容、依步驟操作介面，再把結果帶回對話——驗證 Web 變更不用你截圖轉述。",
+            },
+            metric1: {
+              value: "1 個循環",
+              label: "讀程式碼 · 改檔案 · 執行指令 · 驗證結果",
+            },
+            metric2: {
+              value: "同視窗",
+              label: "終端機、Git、SSH、瀏覽器都是 Agent 的手腳",
+            },
+            metric3: { value: "3 端", label: "macOS / Windows / Linux" },
+            metric4: { value: "MIT", label: "開源，可自架可改造" },
+            agentsTitle: "Agent 與協作",
+            agentsDesc:
+              "技能、MCP 伺服器與子代理擴充的是同一個 Agent；排程任務可以編排成多節點工作流程，專案記憶依專案持久保存並自動注入。",
+            collab1: "子代理平行執行，主會話保持乾淨",
+            collab2: "Goal 模式讓長任務自主推進，依預算收斂",
+            collab3: "Skills 技能與外掛依需求接入",
+            collab4: "Hooks 生命週期鉤子，串接你的腳本",
+            collab5: "排程任務與多節點工作流程",
+            collab6: "專案記憶依專案持久保存並自動注入",
+            collab7: "團隊協作",
+            securityTitle: "安全與體驗",
+            securityDesc:
+              "工具授權與隱私去識別化決定 Agent 能做什麼、能看到什麼；應用程式鎖預設關閉，只遮蓋介面而不加密磁碟資料。",
+            security1: "工具授權決定 Agent 能做什麼",
+            security2: "隱私去識別化決定 Agent 能看到什麼",
+            security3: "應用程式鎖遮蓋介面，PIN 僅儲存加鹽雜湊",
+            security4: "檢查點與回滾，變更隨時可退",
+            security5: "手機遠端控制，繼續目前會話",
+            security6: "用量與日誌，每次工具呼叫都有紀錄",
+          },
+          cta: {
+            title: "現在就讓 Agent<br />接手第一個任務",
+            description:
+              "下載後接上你既有的模型與專案即可開始。任務、工具呼叫與變更紀錄都留在本機，每一步都能審閱、授權和回滾。",
+            console: "進入主控台",
+            signIn: "登入 / 註冊",
+            pricing: "API 定價",
+            download: "下載 Snow App",
+            source: "檢視原始碼",
+          },
+          footer: {
+            blurb:
+              "桌面編碼 Agent。你描述任務，它自己讀程式碼、改檔案、執行指令並驗證結果；終端機、Git、SSH 與瀏覽器都在同一個視窗裡。",
+            note: "Snow Cloud 主控台 · 穩定、零資料保存、高效 · 儲值比例 1:1",
+            product: "產品",
+            resources: "資源",
+            account: "帳戶",
+            service: "服務說明",
+            workspace: "工作台",
+            features: "能力清單",
+            extend: "擴充與安全",
+            docs: "使用文件",
+            github: "GitHub 儲存庫",
+            issues: "問題回報",
+            changelog: "更新日誌",
+            console: "進入主控台",
+            signIn: "登入",
+            signUp: "註冊",
+            pricing: "API 定價",
+            refundPrefix: "退款聯絡",
+          },
+        },
+
+        en: {
+          meta: {
+            title: "Snow App · Desktop Coding Agent",
+            description:
+              "Snow App is a desktop coding agent: describe a task and it reads code, edits files, runs commands, checks diagnostics and verifies the result. Terminal, Git, SSH and browser all live in one window.",
+          },
+          a11y: {
+            backTop: "Back to top",
+            mainNav: "Main navigation",
+            skip: "Skip to main content",
+            themeToLight: "Switch to light mode",
+            themeToDark: "Switch to dark mode",
+            openMenu: "Open menu",
+            closeMenu: "Close menu",
+            language: "Language",
+            service: "Service details",
+            shot: "Snow App three-panel workspace preview",
+          },
+          nav: {
+            service: "Service",
+            workspace: "Workbench",
+            features: "Capabilities",
+            extend: "Extend & security",
+            signIn: "Sign in",
+            console: "Console",
+          },
+          hero: {
+            title: "Describe the task.<br />The agent does the work.",
+            description:
+              "Snow App is a desktop coding agent client: it reads code, edits files, runs commands, checks diagnostics and verifies results on its own. Terminal, Git, SSH, browser and file tree all live in one window, and every change can be reviewed, approved or rolled back on the spot.",
+            console: "Open console",
+            signIn: "Sign in / Sign up",
+            download: "Download Snow App",
+          },
+          service: {
+            note: "Service · Top-up / Subscription / Refund / Data policy",
+            perMonth: "/ month",
+            goReset: "$20 credit, resets every 5 hours",
+            goWeekly: "$140 credit, resets weekly",
+            proReset: "$40 credit, resets every 5 hours",
+            proWeekly: "$300 credit, resets weekly",
+            subscribe: "Subscribe →",
+            reliabilityTitle: "Stable, zero data retention, efficient",
+            reliabilityDesc:
+              "Always online, with no extra retention of requests.",
+            topupTitle: "Top-up ratio 1:1",
+            topupDesc:
+              "Top up any amount and receive the same amount in credit.",
+            refundTitle: "Refund your balance anytime, no questions asked",
+            refundPrefix: "Email us for a refund at",
+          },
+          workspace: {
+            title: "Every sense and limb of the agent,<br />in one window",
+            description:
+              "Sessions and projects on the left, the agent’s conversation and tool calls in the middle, the browser, terminal and Git it is using on the right. These panels are not side-by-side tools — they are parts of the same session context.",
+          },
+          demo: {
+            sessionsLabel: "Sessions",
+            mcp: "MCP · 3 connected",
+            s1Title: "Validate pagination for the users API",
+            s1Meta: "snow-cloud · just now",
+            s2Title: "Fix SSH reconnect after a drop",
+            s2Meta: "snow-app · 2 hours ago",
+            s3Title: "Add filters to the plugin market",
+            s3Meta: "plugin-store · yesterday",
+            s4Title: "Refactor the team panel",
+            s4Meta: "snow-app · 3 days ago",
+            user: "Add pagination parameter validation to the users API, cover it with tests, and commit following the repo conventions.",
+            terminal: "Terminal",
+            browser: "Browser",
+            branch: "Create branch feat/users-pagination",
+            browserStep: "Open /console/users and verify pagination",
+            reply:
+              "Added <code>page/pageSize</code> validation to <code>UsersController</code>, added 3 tests — all passing — and committed to <code>feat/users-pagination</code>",
+            input: "Keep typing, or drop a file / screenshot…",
+            pending: "Pending",
+            memory: "Project memory injected",
+          },
+          features: {
+            title: "Coding loop and extensions",
+            description:
+              "At the core is one loop: read code, edit files, run commands, inspect diagnostics, verify results. Terminal, code search and Git sit inside that loop; skills and sub-agents plug in when needed.",
+            item1: {
+              title: "The coding loop",
+              desc: "Describe a task and the agent reads the code, finds the change points, writes files, runs commands and reads diagnostics until the result is verified — no context shuttling on your side.",
+            },
+            item2: {
+              title: "Codebase search & diagnostics",
+              desc: "Search before acting: the codebase index points it at the truly relevant locations, and LSP diagnostics surface type and compile errors on the spot.",
+            },
+            item3: {
+              title: "Integrated terminal",
+              desc: "A real PTY terminal with tabs and a working directory that follows the project. The agent runs builds and tests here and feeds the output into its next turn.",
+            },
+            item4: {
+              title: "Git panel & change review",
+              desc: "Status, staging, commits, branches and diffs on one screen. Every change can be reviewed, approved and rolled back — you decide before anything is committed.",
+            },
+            item5: {
+              title: "SSH remote workspaces",
+              desc: "Mount a remote host as a workspace: file browsing, terminal and agent sessions all run in the remote context, while you keep a single local window.",
+            },
+            item6: {
+              title: "Built-in browser",
+              desc: "The agent can open pages, extract content, walk through an interface step by step and bring the result back to the conversation — no screenshot retelling needed to verify web changes.",
+            },
+            metric1: {
+              value: "1 loop",
+              label: "read code · edit files · run commands · verify results",
+            },
+            metric2: {
+              value: "1 window",
+              label: "terminal, Git, SSH and browser are the agent’s limbs",
+            },
+            metric3: { value: "3 OS", label: "macOS / Windows / Linux" },
+            metric4: {
+              value: "MIT",
+              label: "open source, self-hostable, forkable",
+            },
+            agentsTitle: "Agents & collaboration",
+            agentsDesc:
+              "Skills, MCP servers and sub-agents extend the same agent; scheduled tasks can be orchestrated into multi-node workflows, and project memory persists per project and is injected automatically.",
+            collab1:
+              "Sub-agents run in parallel, keeping the main session clean",
+            collab2:
+              "Goal mode pushes long tasks forward and converges on a budget",
+            collab3: "Skills and plugins plug in on demand",
+            collab4: "Hooks chain your scripts into the lifecycle",
+            collab5: "Scheduled tasks and multi-node workflows",
+            collab6:
+              "Project memory persists per project and is injected automatically",
+            collab7: "Team collaboration",
+            securityTitle: "Security & experience",
+            securityDesc:
+              "Tool approval and privacy redaction decide what the agent can do and see. The app lock is off by default and only covers the UI — it does not encrypt data on disk.",
+            security1: "Tool approval decides what the agent can do",
+            security2: "Privacy redaction decides what the agent can see",
+            security3:
+              "The app lock covers the UI; the PIN is stored only as a salted hash",
+            security4: "Checkpoints and rollback — any change can be undone",
+            security5:
+              "Remote control from your phone, continuing the current session",
+            security6: "Usage and logs: every tool call is recorded",
+          },
+          cta: {
+            title: "Let the agent take<br />the first task now",
+            description:
+              "Download, connect your existing model and project, and start. Tasks, tool calls and change history stay on your machine, and every step can be reviewed, approved and rolled back.",
+            console: "Open console",
+            signIn: "Sign in / Sign up",
+            pricing: "API pricing",
+            download: "Download Snow App",
+            source: "View source",
+          },
+          footer: {
+            blurb:
+              "A desktop coding agent. Describe a task and it reads code, edits files, runs commands and verifies results; terminal, Git, SSH and browser all live in one window.",
+            note: "Snow Cloud console · Stable, zero data retention, efficient · Top-up 1:1",
+            product: "Product",
+            resources: "Resources",
+            account: "Account",
+            service: "Service",
+            workspace: "Workbench",
+            features: "Capabilities",
+            extend: "Extend & security",
+            docs: "Documentation",
+            github: "GitHub repository",
+            issues: "Report an issue",
+            changelog: "Changelog",
+            console: "Open console",
+            signIn: "Sign in",
+            signUp: "Sign up",
+            pricing: "API pricing",
+            refundPrefix: "Refund contact",
+          },
+        },
+      };
+    </script>
+
+    <script>
+      // 首屏渲染前确定主题，避免闪白 / 闪黑；并识别是否被 new-api 以 iframe 嵌入
+      (function () {
+        var root = document.documentElement;
+        try {
+          if (window.self !== window.top) root.classList.add("is-embedded");
+        } catch (error) {
+          root.classList.add("is-embedded");
+        }
+        root.classList.add("has-js");
+
+        // 首屏确定语言：?lang → localStorage → 浏览器；new-api 稍后会通过 postMessage 覆盖
+        function normalizeLang(tag) {
+          if (!tag) return null;
+          var code = String(tag).toLowerCase().replace(/_/g, "-");
+          if (code === "en" || code.indexOf("en-") === 0) return "en";
+          if (code.indexOf("zh") === 0)
+            return /(hant|tw|hk|mo)/.test(code) ? "zh-TW" : "zh-CN";
+          return null;
+        }
+        var initialLang = null;
+        try {
+          initialLang = normalizeLang(
+            new URLSearchParams(window.location.search).get("lang"),
+          );
+        } catch (error) {}
+        if (!initialLang) {
+          try {
+            initialLang = normalizeLang(localStorage.getItem("snow-home-lang"));
+          } catch (error) {}
+        }
+        if (!initialLang) {
+          var browserLang =
+            (navigator.languages && navigator.languages[0]) ||
+            navigator.language ||
+            "";
+          initialLang = browserLang
+            ? normalizeLang(browserLang) || "en"
+            : "zh-CN";
+        }
+        window.SNOW_HOME_INITIAL_LANG = initialLang;
+        root.lang = initialLang;
+
+        var forcedTheme = null;
+        try {
+          forcedTheme = new URLSearchParams(window.location.search).get(
+            "theme",
+          );
+        } catch (error) {}
+        var stored =
+          forcedTheme === "light" || forcedTheme === "dark"
+            ? forcedTheme
+            : null;
+        if (!stored) {
+          try {
+            stored = localStorage.getItem("snow-home-theme");
+          } catch (error) {}
+        }
+        if (stored !== "light" && stored !== "dark") {
+          stored =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        }
+        root.setAttribute("data-theme", stored);
+        root.style.colorScheme = stored;
+      })();
+    </script>
+
+    <style>
+      /* ==========================================================================
+       设计令牌：暗色为默认，浅色只覆盖变量
+       ========================================================================== */
+      :root {
+        color-scheme: dark;
+
+        --bg: #0a0a0a;
+        --bg-2: #111111;
+        --bg-3: #1a1a1a;
+        --bg-4: #1f1f1f;
+
+        --text: #f5f5f5;
+        --text-2: #d4d4d4;
+        --text-3: #a3a3a3;
+        --muted: #8a8a8a;
+
+        --line: #2b2b2b;
+        --line-2: #454545;
+
+        --brand: #e9c87c;
+        --brand-soft: #f7e6bb;
+        --brand-deep: #c69a4a;
+        --brand-ink: #191308;
+
+        --green: #4ade80;
+        --red: #f0716b;
+        --blue: #58a6ff;
+
+        --btn-bg: #f5f5f5;
+        --btn-bg-hover: #dedede;
+        --btn-text: #0a0a0a;
+        --btn-ghost-line: rgba(255, 255, 255, 0.25);
+        --btn-ghost-hover: rgba(255, 255, 255, 0.06);
+
+        --nav-bg: rgba(10, 10, 10, 0.72);
+        --glow: rgba(233, 200, 124, 0.11);
+        --sheen: rgba(247, 230, 187, 0.13);
+        --grain-opacity: 0.05;
+        --grain-blend: normal;
+        --selection: rgba(233, 200, 124, 0.28);
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", system-ui, sans-serif;
+        --font-mono:
+          "Cascadia Code", "SF Mono", Consolas, Menlo, ui-monospace, monospace;
+      }
+
+      /* 繁体中文优先使用 TC 字形，避免 macOS 用 SC 字形渲染繁体 */
+      :root[lang="zh-TW"] {
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC",
+          "Microsoft JhengHei", system-ui, sans-serif;
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+
+        --bg: #faf9f7;
+        --bg-2: #ffffff;
+        --bg-3: #f4f2ed;
+        --bg-4: #ece8e0;
+
+        --text: #141210;
+        --text-2: #3b3733;
+        --text-3: #6a645c;
+        --muted: #8b847a;
+
+        --line: #e3dfd6;
+        --line-2: #cdc7bc;
+
+        --brand: #8a5f10;
+        --brand-soft: #6f4b08;
+        --brand-deep: #a87b21;
+        --brand-ink: #fdf8ec;
+
+        --green: #157f3c;
+        --red: #b42318;
+        --blue: #1d4ed8;
+
+        --btn-bg: #141210;
+        --btn-bg-hover: #2a2521;
+        --btn-text: #faf9f7;
+        --btn-ghost-line: rgba(20, 18, 16, 0.2);
+        --btn-ghost-hover: rgba(20, 18, 16, 0.05);
+
+        --nav-bg: rgba(250, 249, 247, 0.72);
+        --glow: rgba(198, 154, 74, 0.2);
+        --sheen: rgba(198, 154, 74, 0.12);
+        --grain-opacity: 0.03;
+        --grain-blend: multiply;
+        --selection: rgba(198, 154, 74, 0.28);
+        --shadow: 0 24px 60px rgba(35, 29, 18, 0.16);
+      }
+
+      /* ==========================================================================
+       基础
+       ========================================================================== */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--bg);
+        scroll-behavior: smooth;
+        scroll-padding-top: 88px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--line-2) transparent;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        overflow-x: hidden;
+      }
+
+      ::selection {
+        background: var(--selection);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      img,
+      svg {
+        display: block;
+      }
+
+      p,
+      h1,
+      h2,
+      h3,
+      ul,
+      figure {
+        margin: 0;
+      }
+
+      ul {
+        padding: 0;
+        list-style: none;
+      }
+
+      /* ==========================================================================
+       通用排版与组件
+       ========================================================================== */
+      .wrap {
+        width: 100%;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      .display {
+        font-weight: 400;
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+      }
+
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--text-3);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        font-weight: 400;
+        line-height: 1;
+        white-space: nowrap;
+        text-decoration: none;
+        cursor: pointer;
+        transition:
+          background-color 0.18s ease,
+          border-color 0.18s ease,
+          color 0.18s ease,
+          opacity 0.18s ease;
+      }
+
+      .btn-sm {
+        height: 36px;
+        padding: 0 16px;
+        font-size: 13.5px;
+      }
+
+      .btn-lg {
+        height: 44px;
+        padding: 0 24px;
+        font-size: 14px;
+      }
+
+      .btn-primary {
+        background: var(--btn-bg);
+        color: var(--btn-text);
+      }
+
+      .btn-primary:hover {
+        background: var(--btn-bg-hover);
+      }
+
+      .btn-ghost {
+        border-color: var(--btn-ghost-line);
+        color: var(--text);
+      }
+
+      .btn-ghost:hover {
+        border-color: var(--text-3);
+        background: var(--btn-ghost-hover);
+      }
+
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        color: var(--text-2);
+        transition:
+          background-color 0.18s ease,
+          border-color 0.18s ease,
+          color 0.18s ease;
+      }
+
+      .icon-btn:hover {
+        background: var(--btn-ghost-hover);
+        color: var(--text);
+      }
+
+      .icon-btn.has-line {
+        border-color: var(--btn-ghost-line);
+      }
+
+      .icon-btn.has-line:hover {
+        border-color: var(--text-3);
+      }
+
+      /* 深色显示太阳（切到浅色），浅色显示月亮（切到深色） */
+      :root[data-theme="dark"] .icon-moon {
+        display: none;
+      }
+
+      :root[data-theme="light"] .icon-sun {
+        display: none;
+      }
+
+      .btn:focus-visible,
+      .icon-btn:focus-visible,
+      a:focus-visible,
+      button:focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 3px;
+      }
+
+      .link-gold {
+        color: var(--brand);
+        text-decoration: underline;
+        text-decoration-color: color-mix(
+          in srgb,
+          var(--brand) 40%,
+          transparent
+        );
+        text-underline-offset: 3px;
+        transition: text-decoration-color 0.18s ease;
+      }
+
+      .link-gold:hover {
+        text-decoration-color: var(--brand);
+      }
+
+      .ico {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .ico-sm {
+        width: 13px;
+        height: 13px;
+      }
+
+      .ico-lg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .icon-sprite {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+
+      .app-icon {
+        display: block;
+        border-radius: 6px;
+        background-image: url("data:image/png;base64,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");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        box-shadow:
+          0 0 0 1px rgba(0, 0, 0, 0.06),
+          0 4px 12px rgba(0, 0, 0, 0.14);
+      }
+
+      :root[data-theme="dark"] .app-icon {
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.08),
+          0 4px 16px rgba(0, 0, 0, 0.5);
+      }
+
+      .skip-link {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 100;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: var(--text);
+        color: var(--bg);
+        font-size: 13px;
+        transform: translateY(-160%);
+        transition: transform 0.2s ease;
+      }
+
+      .skip-link:focus-visible {
+        transform: translateY(0);
+      }
+
+      section[id] {
+        scroll-margin-top: 88px;
+      }
+
+      /* ==========================================================================
+       顶部导航（iframe 内隐藏，由 new-api 自己的头部接管）
+       ========================================================================== */
+      .site-nav {
+        position: fixed;
+        inset: 0 0 auto;
+        z-index: 50;
+        border-bottom: 1px solid transparent;
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease;
+      }
+
+      .site-nav.is-scrolled {
+        background: var(--nav-bg);
+        border-bottom-color: var(--line);
+        -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        backdrop-filter: blur(14px) saturate(1.4);
+      }
+
+      .nav-inner {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        height: 64px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        flex: none;
+        font-size: 14px;
+        letter-spacing: -0.01em;
+        color: var(--text);
+      }
+
+      .brand-icon {
+        width: 24px;
+        height: 24px;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .nav-links a {
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 13.5px;
+        color: var(--text-3);
+        transition:
+          background-color 0.18s ease,
+          color 0.18s ease;
+      }
+
+      .nav-links a:hover {
+        background: var(--btn-ghost-hover);
+        color: var(--text);
+      }
+
+      .nav-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+      }
+
+      .lang-switch {
+        position: relative;
+      }
+
+      .lang-btn {
+        width: auto;
+        padding: 0 10px;
+        gap: 6px;
+        border-color: var(--btn-ghost-line);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.02em;
+      }
+
+      .lang-current {
+        line-height: 1;
+      }
+
+      .lang-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 60;
+        min-width: 160px;
+        padding: 6px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--bg-2);
+        box-shadow: var(--shadow);
+      }
+
+      .lang-menu[hidden] {
+        display: none;
+      }
+
+      .lang-menu button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 8px;
+        color: var(--text-2);
+        font-size: 13px;
+        text-align: left;
+      }
+
+      .lang-menu button:hover {
+        background: var(--btn-ghost-hover);
+        color: var(--text);
+      }
+
+      .lang-menu button.is-active {
+        color: var(--brand);
+      }
+
+      .lang-menu button.is-active::after {
+        content: "✓";
+        font-size: 12px;
+      }
+
+      .menu-toggle {
+        display: none;
+      }
+
+      .mobile-menu {
+        background: var(--bg-2);
+        border-bottom: 1px solid var(--line);
+        padding: 8px 24px 20px;
+      }
+
+      .mobile-menu[hidden] {
+        display: none;
+      }
+
+      .mobile-menu a.mobile-link {
+        display: block;
+        padding: 12px 4px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        color: var(--text-2);
+      }
+
+      .mobile-menu-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .mobile-menu-actions .btn {
+        flex: 1;
+      }
+
+      body.menu-open {
+        overflow: hidden;
+      }
+
+      .is-embedded .site-nav {
+        display: none;
+      }
+
+      /* ==========================================================================
+       首屏
+       ========================================================================== */
+      .hero {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        padding: 144px 0 112px;
+        background: var(--bg);
+      }
+
+      .sand {
+        position: absolute;
+        inset: 0;
+        z-index: -3;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .atmos {
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .glow {
+        position: absolute;
+        top: -20rem;
+        left: 50%;
+        width: 44rem;
+        height: 44rem;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--glow), transparent 60%);
+        filter: blur(44px);
+        transform: translate3d(-50%, 0, 0);
+        animation: snow-breathe 14s ease-in-out infinite;
+      }
+
+      .sheen {
+        position: absolute;
+        top: -33%;
+        bottom: -33%;
+        left: 0;
+        width: 46%;
+        background: linear-gradient(
+          100deg,
+          transparent 34%,
+          var(--sheen) 50%,
+          transparent 66%
+        );
+        filter: blur(10px);
+        opacity: 0;
+        animation: snow-sheen 11s ease-in-out infinite;
+      }
+
+      .grain {
+        position: absolute;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+        opacity: var(--grain-opacity);
+        mix-blend-mode: var(--grain-blend);
+      }
+
+      .hero-fade {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 176px;
+        background: linear-gradient(to bottom, transparent, var(--bg));
+      }
+
+      .hero-inner {
+        position: relative;
+        z-index: 1;
+      }
+
+      .hero-logo {
+        position: absolute;
+        top: calc(50% + 18px);
+        right: max(24px, calc((100% - 1280px) / 2 + 24px));
+        z-index: 0;
+        width: clamp(380px, 38vw, 550px);
+        aspect-ratio: 1;
+        transform: translateY(-50%);
+        pointer-events: none;
+      }
+
+      .hero-logo canvas {
+        position: relative;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .pixel-wordmark {
+        display: flex;
+        align-items: center;
+        min-height: 20px;
+        color: var(--text);
+      }
+
+      .pixel-wordmark svg {
+        height: 20px;
+        width: auto;
+      }
+
+      .pixel-fallback {
+        font-size: 18px;
+        font-weight: 400;
+        letter-spacing: 0.02em;
+      }
+
+      .hero-eyebrow {
+        margin-top: 56px;
+        color: var(--brand);
+      }
+
+      .hero-title {
+        margin-top: 20px;
+        max-width: 18ch;
+        font-size: clamp(38px, 6.6vw, 80px);
+        text-wrap: balance;
+        color: var(--text);
+      }
+
+      .hero-lede {
+        margin-top: 32px;
+        max-width: 46ch;
+        font-size: clamp(16px, 1.4vw, 17px);
+        line-height: 1.75;
+        color: var(--text-3);
+      }
+
+      /* 英文标题更长：略收字号与行宽，避免压到右侧粒子 Logo */
+      :root[lang="en"] .hero-title {
+        max-width: 17ch;
+        font-size: clamp(36px, 5.9vw, 74px);
+      }
+
+      :root[lang="en"] .hero-lede {
+        max-width: 48ch;
+      }
+
+      /* 英文标题更长，Logo 略收一点，保证文字与粒子之间留白 */
+      :root[lang="en"] .hero-logo {
+        width: clamp(360px, 34vw, 500px);
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-top: 40px;
+      }
+
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 64px;
+        color: var(--text-3);
+      }
+
+      .hero-meta a {
+        color: var(--text-2);
+        border-bottom: 1px solid var(--line-2);
+        transition:
+          color 0.18s ease,
+          border-color 0.18s ease;
+      }
+
+      .meta-dot {
+        opacity: 0.65;
+      }
+
+      .meta-nowrap {
+        white-space: nowrap;
+      }
+
+      .hero-meta a:hover {
+        color: var(--text);
+        border-bottom-color: var(--text-3);
+      }
+
+      /* ==========================================================================
+       服务说明（充值 / 退款 / 数据策略）
+       ========================================================================== */
+      .service {
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: var(--bg-2);
+      }
+
+      .service-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 28px 0 20px;
+      }
+
+      .service-head-note {
+        font-size: 12.5px;
+        color: var(--text-3);
+      }
+
+      .service-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+      }
+
+      .service-cell {
+        padding: 30px 32px;
+        border-left: 1px solid var(--line);
+      }
+
+      .service-cell:first-child {
+        padding-left: 0;
+        border-left: 0;
+      }
+
+      .service-cell:last-child {
+        padding-right: 0;
+      }
+
+      .service-title {
+        margin-top: 16px;
+        font-size: 22px;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+        color: var(--text);
+      }
+
+      .service-desc {
+        margin-top: 10px;
+        font-size: 13.5px;
+        line-height: 1.7;
+        color: var(--text-3);
+      }
+
+      .service-desc a {
+        white-space: nowrap;
+      }
+
+      .plans {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        padding: 8px 0 40px;
+      }
+
+      .plan-card {
+        display: flex;
+        flex-direction: column;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--bg-3);
+      }
+
+      .plan-card.is-featured {
+        border-color: var(--brand-deep);
+      }
+
+      .plan-price {
+        margin-top: 14px;
+        font-size: 40px;
+        font-weight: 400;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        color: var(--text);
+      }
+
+      .plan-unit {
+        margin-left: 4px;
+        font-size: 15px;
+        color: var(--text-3);
+      }
+
+      .plan-list {
+        margin: 18px 0 24px;
+        padding: 0;
+        list-style: none;
+        font-size: 14px;
+        line-height: 2;
+        color: var(--text-2);
+      }
+
+      .plan-card .btn {
+        margin-top: auto;
+        justify-content: center;
+      }
+
+      /* ==========================================================================
+       内容区通用
+       ========================================================================== */
+      .section {
+        padding: 80px 0;
+      }
+
+      .section + .section {
+        border-top: 1px solid var(--line);
+      }
+
+      .h2 {
+        margin-top: 20px;
+        max-width: 24ch;
+        font-size: clamp(30px, 3.6vw, 42px);
+        color: var(--text);
+      }
+
+      .lede {
+        margin-top: 24px;
+        max-width: 54ch;
+        font-size: 15px;
+        line-height: 1.75;
+        color: var(--text-3);
+      }
+
+      /* ==========================================================================
+       产品窗口示意（始终使用 App 的暗色外观，像一张真实截图）
+       ========================================================================== */
+      .shot {
+        --s-bg: #0a0a0a;
+        --s-bg2: #111111;
+        --s-bg3: #1a1a1a;
+        --s-bg4: #1f1f1f;
+        --s-line: #2b2b2b;
+        --s-text: #f5f5f5;
+        --s-text2: #d4d4d4;
+        --s-text3: #a3a3a3;
+        --s-muted: #8a8a8a;
+        --s-green: #4ade80;
+        --s-red: #f0716b;
+        --s-blue: #58a6ff;
+
+        margin-top: 48px;
+        overflow: hidden;
+        border: 1px solid var(--s-line);
+        border-radius: 12px;
+        background: var(--s-bg2);
+        color: var(--s-text);
+        box-shadow: var(--shadow);
+      }
+
+      .shot-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--s-line);
+        background: var(--s-bg2);
+      }
+
+      .shot-icon {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+      }
+
+      .shot-project {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--s-text3);
+      }
+
+      .shot-branch {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--s-text3);
+      }
+
+      .shot-body {
+        display: grid;
+        grid-template-columns: 196px minmax(0, 1fr) 248px;
+        align-items: stretch;
+      }
+
+      .shot-side {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px;
+        border-right: 1px solid var(--s-line);
+        background: var(--s-bg);
+      }
+
+      .shot-label {
+        padding: 6px 8px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--s-muted);
+      }
+
+      .shot-session {
+        padding: 8px 10px;
+        border-radius: 8px;
+      }
+
+      .shot-session.is-active {
+        background: var(--s-bg3);
+      }
+
+      .shot-session-title {
+        overflow: hidden;
+        font-size: 12px;
+        color: var(--s-text3);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .shot-session.is-active .shot-session-title {
+        color: var(--s-text);
+      }
+
+      .shot-session-meta {
+        margin-top: 2px;
+        overflow: hidden;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--s-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .shot-mcp {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        padding: 8px 10px;
+        border: 1px solid var(--s-line);
+        border-radius: 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--s-text3);
+      }
+
+      .shot-main {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 320px;
+        padding: 16px;
+        background: var(--s-bg2);
+      }
+
+      .shot-user {
+        margin-left: auto;
+        max-width: 86%;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: var(--s-bg3);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--s-text2);
+      }
+
+      .shot-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .shot-step {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border: 1px solid var(--s-line);
+        border-radius: 8px;
+      }
+
+      .shot-step-icon {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        flex: none;
+        border: 1px solid var(--s-line);
+        border-radius: 6px;
+        background: var(--s-bg3);
+        color: var(--s-text3);
+      }
+
+      .shot-step-icon .ico {
+        width: 14px;
+        height: 14px;
+      }
+
+      .shot-step-body {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .shot-step-title {
+        font-size: 11.5px;
+        color: var(--s-text2);
+      }
+
+      .shot-code {
+        overflow: hidden;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--s-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .shot-pill {
+        flex: none;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: var(--s-bg3);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--s-text3);
+      }
+
+      .shot-pill.is-ok {
+        background: rgba(74, 222, 128, 0.15);
+        color: var(--s-green);
+      }
+
+      .shot-reply {
+        max-width: 94%;
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: var(--s-text2);
+      }
+
+      .shot-reply code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--s-blue);
+      }
+
+      .shot-reply-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        margin-right: 6px;
+        border-radius: 4px;
+        background: var(--s-bg3);
+        vertical-align: -3px;
+      }
+
+      .shot-reply-icon .ico {
+        width: 11px;
+        height: 11px;
+        color: var(--s-blue);
+      }
+
+      .shot-caret {
+        display: inline-block;
+        width: 2px;
+        height: 14px;
+        margin-left: 4px;
+        background: var(--s-blue);
+        vertical-align: -2px;
+        animation: snow-caret 1.1s steps(2, start) infinite;
+      }
+
+      .shot-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        padding: 8px 12px;
+        border: 1px solid var(--s-line);
+        border-radius: 8px;
+        font-size: 11px;
+        color: var(--s-text3);
+      }
+
+      .shot-input .ico {
+        width: 14px;
+        height: 14px;
+      }
+
+      .shot-panel {
+        display: flex;
+        flex-direction: column;
+        border-left: 1px solid var(--s-line);
+        background: var(--s-bg);
+      }
+
+      .shot-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 8px;
+        border-bottom: 1px solid var(--s-line);
+      }
+
+      .shot-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 10.5px;
+        color: var(--s-muted);
+      }
+
+      .shot-tab.is-active {
+        background: var(--s-bg4);
+        color: var(--s-text);
+      }
+
+      .shot-tab .ico {
+        width: 12px;
+        height: 12px;
+      }
+
+      .shot-term {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        line-height: 1.6;
+      }
+
+      .shot-term .cmd {
+        color: var(--s-text2);
+      }
+
+      .shot-term .out {
+        color: var(--s-muted);
+      }
+
+      .shot-term .ok {
+        color: var(--s-green);
+      }
+
+      .shot-git {
+        margin-top: auto;
+        padding: 12px;
+        border-top: 1px solid var(--s-line);
+      }
+
+      .shot-git .shot-label {
+        padding: 0 0 8px;
+      }
+
+      .shot-file {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 0;
+        font-size: 10.5px;
+        color: var(--s-text3);
+      }
+
+      .shot-file > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .shot-diff {
+        flex: none;
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .shot-diff .add {
+        color: var(--s-green);
+      }
+
+      .shot-diff .del {
+        color: var(--s-red);
+      }
+
+      .shot-status {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 8px 14px;
+        border-top: 1px solid var(--s-line);
+        background: var(--s-bg2);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--s-text3);
+      }
+
+      .shot-status-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .shot-status-item.push {
+        margin-left: auto;
+      }
+
+      .shot-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--s-green);
+      }
+
+      /* ==========================================================================
+       能力区
+       ========================================================================== */
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        margin-top: 48px;
+        border: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .feature {
+        padding: 28px;
+        background: var(--bg-3);
+        transition: background-color 0.2s ease;
+      }
+
+      .feature:hover {
+        background: var(--bg-4);
+      }
+
+      .feature .eyebrow {
+        font-size: 11px;
+      }
+
+      .feature-title {
+        margin-top: 20px;
+        font-size: 17px;
+        font-weight: 400;
+        color: var(--text);
+      }
+
+      .feature-desc {
+        margin-top: 12px;
+        font-size: 13.5px;
+        line-height: 1.75;
+        color: var(--text-3);
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        margin-top: 64px;
+        border: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .metric {
+        padding: 32px 24px;
+        background: var(--bg);
+      }
+
+      .metric-value {
+        font-size: 34px;
+        color: var(--text);
+      }
+
+      .metric-label {
+        margin-top: 16px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.5;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-3);
+      }
+
+      .extend-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        margin-top: 64px;
+        border: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .extend-cell {
+        padding: 36px;
+        background: var(--bg-3);
+      }
+
+      .extend-title {
+        margin-top: 20px;
+        font-size: 24px;
+        color: var(--text);
+      }
+
+      .extend-desc {
+        margin-top: 16px;
+        max-width: 46ch;
+        font-size: 13.5px;
+        line-height: 1.75;
+        color: var(--text-3);
+      }
+
+      .point-list {
+        display: flex;
+        flex-direction: column;
+        margin-top: 24px;
+      }
+
+      .point-list li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        font-size: 13.5px;
+        color: var(--text-2);
+      }
+
+      .point-list li + li {
+        border-top: 1px solid var(--line);
+      }
+
+      .point-list .ico {
+        width: 16px;
+        height: 16px;
+        color: var(--muted);
+      }
+
+      /* ==========================================================================
+       收束 CTA
+       ========================================================================== */
+      .cta {
+        padding: 96px 0 64px;
+        border-top: 1px solid var(--line);
+        background: var(--bg);
+      }
+
+      .cta-title {
+        margin-top: 48px;
+        max-width: 20ch;
+        font-size: clamp(34px, 4.8vw, 56px);
+        color: var(--text);
+      }
+
+      .cta-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 40px;
+      }
+
+      .cta-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 56px;
+        color: var(--text-3);
+      }
+
+      .cta-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-top: 24px;
+        font-size: 13px;
+        color: var(--text-3);
+      }
+
+      .cta-links a {
+        color: var(--text-3);
+        text-decoration: underline;
+        text-decoration-color: transparent;
+        text-underline-offset: 4px;
+        transition:
+          color 0.18s ease,
+          text-decoration-color 0.18s ease;
+      }
+
+      .cta-links a:hover {
+        color: var(--text);
+        text-decoration-color: var(--line-2);
+      }
+
+      /* ==========================================================================
+       页脚
+       ========================================================================== */
+      .footer {
+        padding: 16px 0 64px;
+        background: var(--bg);
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr 1fr 1fr;
+        gap: 48px;
+        padding-top: 48px;
+        border-top: 1px solid var(--line);
+      }
+
+      .footer-brand-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        letter-spacing: -0.01em;
+        color: var(--text);
+      }
+
+      .footer-icon {
+        width: 24px;
+        height: 24px;
+      }
+
+      .footer-blurb {
+        margin-top: 20px;
+        max-width: 40ch;
+        font-size: 13px;
+        line-height: 1.75;
+        color: var(--text-3);
+      }
+
+      .footer-note {
+        margin-top: 16px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .footer-col ul {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .footer-col a {
+        font-size: 13px;
+        color: var(--text-3);
+        transition: color 0.15s ease;
+      }
+
+      .footer-col a:hover {
+        color: var(--text);
+      }
+
+      .footer-bottom {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px 24px;
+        margin-top: 64px;
+        padding-top: 32px;
+        border-top: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--text-3);
+      }
+
+      .footer-bottom-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .footer-bottom-links a {
+        transition: color 0.15s ease;
+      }
+
+      .footer-bottom-links a:hover {
+        color: var(--text);
+      }
+
+      /* ==========================================================================
+       像素字标 / 入场动效
+       ========================================================================== */
+      @keyframes snow-pixel-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .pixel-cell {
+        opacity: 0;
+        animation: snow-pixel-in 0.4s ease-out both;
+      }
+
+      /* 兜底：动画被暂停或延迟过长时，1.4s 后直接把字标点亮 */
+      .pixel-ready .pixel-cell {
+        animation: none;
+        opacity: 1;
+      }
+
+      @keyframes snow-caret {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes snow-breathe {
+        0%,
+        100% {
+          transform: translate3d(-50%, 0, 0) scale(1);
+          opacity: 0.6;
+        }
+        50% {
+          transform: translate3d(-50%, 0, 0) scale(1.08);
+          opacity: 1;
+        }
+      }
+
+      @keyframes snow-sheen {
+        0% {
+          transform: translate3d(-130%, 0, 0) rotate(-16deg);
+          opacity: 0;
+        }
+        14% {
+          opacity: 1;
+        }
+        58% {
+          opacity: 1;
+        }
+        82%,
+        100% {
+          transform: translate3d(230%, 0, 0) rotate(-16deg);
+          opacity: 0;
+        }
+      }
+
+      .has-js .reveal {
+        opacity: 0;
+        transform: translateY(14px);
+        transition:
+          opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+          transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .has-js .reveal.is-visible {
+        opacity: 1;
+        transform: none;
+      }
+
+      /* ==========================================================================
+       响应式
+       ========================================================================== */
+      @media (min-width: 640px) {
+        .hero {
+          padding: 160px 0 128px;
+        }
+
+        .pixel-wordmark,
+        .pixel-wordmark svg {
+          height: 24px;
+        }
+
+        .section {
+          padding: 96px 0;
+        }
+
+        .cta {
+          padding: 112px 0 64px;
+        }
+      }
+
+      @media (max-width: 1080px) {
+        .hero-logo {
+          display: none;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .nav-links,
+        .nav-signin {
+          display: none;
+        }
+
+        .menu-toggle {
+          display: inline-flex;
+        }
+
+        .service-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .service-cell {
+          padding: 24px 0;
+          border-top: 1px solid var(--line);
+          border-left: 0;
+        }
+
+        .service-cell:first-child {
+          border-top: 0;
+        }
+
+        .plans {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .footer-brand {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 767px) {
+        .shot-body {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .shot-side,
+        .shot-panel {
+          display: none;
+        }
+
+        .feature-grid,
+        .extend-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .metric-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .feature {
+          padding: 24px;
+        }
+
+        .extend-cell {
+          padding: 28px 24px;
+        }
+
+        .hide-sm {
+          display: none;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .nav-github {
+          display: none;
+        }
+
+        .lang-btn {
+          width: 36px;
+          padding: 0;
+        }
+
+        .lang-current {
+          display: none;
+        }
+
+        .hero {
+          padding-top: 128px;
+        }
+
+        .hero-meta {
+          margin-top: 48px;
+          gap: 6px;
+          font-size: 10px;
+          letter-spacing: 0.08em;
+        }
+
+        .cta-meta {
+          gap: 6px;
+          font-size: 10px;
+          letter-spacing: 0.08em;
+        }
+
+        .shot-branch {
+          display: none;
+        }
+
+        .footer-grid {
+          grid-template-columns: 1fr;
+          gap: 36px;
+        }
+
+        .footer-bottom {
+          margin-top: 48px;
+        }
+      }
+
+      @media (max-width: 380px) {
+        .brand-name {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+
+        .pixel-cell {
+          animation: none;
+          opacity: 1;
+        }
+
+        .has-js .reveal {
+          opacity: 1;
+          transform: none;
+        }
+
+        .glow,
+        .sheen {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- 图标库 -->
+    <svg
+      class="icon-sprite"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <symbol id="i-github" viewBox="0 0 24 24">
+        <path
+          d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"
+        />
+        <path d="M9 18c-4.51 2-5-2-7-2" />
+      </symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4" />
+        <path
+          d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+        />
+      </symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24">
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+      </symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24">
+        <line x1="4" x2="20" y1="6" y2="6" />
+        <line x1="4" x2="20" y1="12" y2="12" />
+        <line x1="4" x2="20" y1="18" y2="18" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18M6 6l12 12" />
+      </symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24">
+        <polyline points="4 17 10 11 4 5" />
+        <line x1="12" x2="20" y1="19" y2="19" />
+      </symbol>
+      <symbol id="i-git" viewBox="0 0 24 24">
+        <line x1="6" x2="6" y1="3" y2="15" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M18 9a9 9 0 0 1-9 9" />
+      </symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+        <path d="M2 12h20" />
+      </symbol>
+      <symbol id="i-blocks" viewBox="0 0 24 24">
+        <rect width="7" height="7" x="14" y="3" rx="1" />
+        <path
+          d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"
+        />
+      </symbol>
+      <symbol id="i-message" viewBox="0 0 24 24">
+        <path
+          d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+        />
+        <path d="M13 8H7M17 12H7" />
+      </symbol>
+      <symbol id="i-server" viewBox="0 0 24 24">
+        <rect width="20" height="8" x="2" y="2" rx="2" />
+        <rect width="20" height="8" x="2" y="14" rx="2" />
+        <line x1="6" x2="6.01" y1="6" y2="6" />
+        <line x1="6" x2="6.01" y1="18" y2="18" />
+      </symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M5 12h14" />
+        <path d="m12 5 7 7-7 7" />
+      </symbol>
+      <symbol id="i-download" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" x2="12" y1="3" y2="15" />
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path
+          d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+        />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol id="i-eyeoff" viewBox="0 0 24 24">
+        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+        <path
+          d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"
+        />
+        <path
+          d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"
+        />
+        <line x1="2" x2="22" y1="2" y2="22" />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+      <symbol id="i-history" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l4 2" />
+      </symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24">
+        <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+        <path d="M12 18h.01" />
+      </symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24">
+        <path
+          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+        />
+        <path d="M20 3v4M22 5h-4M4 17v2M5 18H3" />
+      </symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24">
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+      </symbol>
+      <symbol id="i-route" viewBox="0 0 24 24">
+        <circle cx="6" cy="19" r="3" />
+        <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+        <circle cx="18" cy="5" r="3" />
+      </symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <path
+          d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"
+        />
+        <path d="M16 2v4M8 2v4M3 10h5" />
+        <path d="M17.5 17.5 16 16.3V14" />
+        <circle cx="16" cy="16" r="6" />
+      </symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24">
+        <path
+          d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"
+        />
+        <path
+          d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"
+        />
+        <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+      </symbol>
+      <symbol id="i-package" viewBox="0 0 24 24">
+        <path d="m7.5 4.27 9 5.15" />
+        <path
+          d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+        />
+        <path d="m3.3 7 8.7 5 8.7-5" />
+        <path d="M12 22V12" />
+      </symbol>
+      <symbol id="i-users" viewBox="0 0 24 24">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </symbol>
+    </svg>
+
+    <a class="skip-link" href="#workspace" data-i18n="a11y.skip"
+      >跳到主要内容</a
+    >
+
+    <header class="site-nav" id="siteNav">
+      <div class="wrap nav-inner">
+        <a
+          class="brand"
+          href="#top"
+          aria-label="回到顶部"
+          data-i18n-aria="a11y.backTop"
+        >
+          <span class="app-icon brand-icon" aria-hidden="true"></span>
+          <span class="brand-name" data-brand-name>Snow App</span>
+        </a>
+
+        <nav
+          class="nav-links"
+          aria-label="主导航"
+          data-i18n-aria="a11y.mainNav"
+        >
+          <a href="#service" data-i18n="nav.service">服务</a>
+          <a href="#workspace" data-i18n="nav.workspace">工作台</a>
+          <a href="#features" data-i18n="nav.features">能力</a>
+          <a href="#extend" data-i18n="nav.extend">扩展与安全</a>
+        </nav>
+
+        <div class="nav-actions">
+          <a
+            class="icon-btn has-line nav-github"
+            data-ext="github"
+            href="https://github.com/MayDay-wpf/snow-app"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="GitHub"
+          >
+            <svg class="ico"><use href="#i-github" /></svg>
+          </a>
+
+          <div class="lang-switch">
+            <button
+              class="icon-btn lang-btn"
+              id="langToggle"
+              type="button"
+              aria-label="语言"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="langMenu"
+              data-i18n-aria="a11y.language"
+            >
+              <svg class="ico ico-sm"><use href="#i-globe" /></svg>
+              <span class="lang-current" data-lang-current>简</span>
+            </button>
+            <div
+              class="lang-menu"
+              id="langMenu"
+              role="listbox"
+              aria-label="语言"
+              data-i18n-aria="a11y.language"
+              hidden
+            >
+              <button
+                type="button"
+                role="option"
+                data-lang-option="zh-CN"
+                aria-selected="true"
+              >
+                简体中文
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-lang-option="zh-TW"
+                aria-selected="false"
+              >
+                繁體中文
+              </button>
+              <button
+                type="button"
+                role="option"
+                data-lang-option="en"
+                aria-selected="false"
+              >
+                English
+              </button>
+            </div>
+          </div>
+
+          <button
+            class="icon-btn theme-toggle"
+            id="themeToggle"
+            type="button"
+            aria-label="切换深浅色"
+          >
+            <svg class="ico icon-sun"><use href="#i-sun" /></svg>
+            <svg class="ico icon-moon"><use href="#i-moon" /></svg>
+          </button>
+          <a
+            class="btn btn-ghost btn-sm nav-signin"
+            data-nav="signIn"
+            href="/sign-in"
+            data-i18n="nav.signIn"
+            >登录</a
+          >
+          <a
+            class="btn btn-primary btn-sm"
+            data-nav="dashboard"
+            href="/dashboard"
+            data-i18n="nav.console"
+            >控制台</a
+          >
+          <button
+            class="icon-btn menu-toggle"
+            id="menuToggle"
+            type="button"
+            aria-label="打开菜单"
+            aria-expanded="false"
+            aria-controls="mobileMenu"
+          >
+            <svg class="ico"><use href="#i-menu" /></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="mobile-menu" id="mobileMenu" hidden>
+        <a class="mobile-link" href="#service" data-i18n="nav.service">服务</a>
+        <a class="mobile-link" href="#workspace" data-i18n="nav.workspace"
+          >工作台</a
+        >
+        <a class="mobile-link" href="#features" data-i18n="nav.features"
+          >能力</a
+        >
+        <a class="mobile-link" href="#extend" data-i18n="nav.extend"
+          >扩展与安全</a
+        >
+        <div class="mobile-menu-actions">
+          <a
+            class="btn btn-ghost btn-sm"
+            data-nav="signIn"
+            href="/sign-in"
+            data-i18n="nav.signIn"
+            >登录</a
+          >
+          <a
+            class="btn btn-primary btn-sm"
+            data-nav="dashboard"
+            href="/dashboard"
+            data-i18n="nav.console"
+            >控制台</a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <canvas class="sand" id="sand" aria-hidden="true"></canvas>
+        <div class="atmos" aria-hidden="true">
+          <div class="glow"></div>
+          <div class="sheen"></div>
+          <div class="grain"></div>
+          <div class="hero-fade"></div>
+        </div>
+
+        <div class="hero-logo" aria-hidden="true">
+          <canvas id="logoSand"></canvas>
+        </div>
+
+        <div class="wrap hero-inner">
+          <div
+            class="pixel-wordmark"
+            data-wordmark="SNOW APP"
+            role="img"
+            aria-label="SNOW APP"
+          ></div>
+
+          <p class="eyebrow hero-eyebrow">Desktop Coding Agent</p>
+
+          <h1 class="display hero-title" data-i18n-html="hero.title">
+            你描述任务，<br />Agent 自己动手
+          </h1>
+
+          <p class="hero-lede" data-i18n="hero.description">
+            Snow App 是桌面编码 Agent
+            客户端：它自己读代码、改文件、执行命令、查看诊断并验证结果。终端、Git、SSH、浏览器和文件树都在同一个窗口里，每一处改动都能当场审阅、授权和回滚。
+          </p>
+
+          <div class="hero-actions">
+            <a
+              class="btn btn-primary btn-lg"
+              data-nav="dashboard"
+              href="/dashboard"
+            >
+              <span data-i18n="hero.console">进入控制台</span>
+              <svg class="ico ico-sm"><use href="#i-arrow" /></svg>
+            </a>
+            <a
+              class="btn btn-ghost btn-lg"
+              data-nav="signIn"
+              href="/sign-in"
+              data-i18n="hero.signIn"
+              >登录 / 注册</a
+            >
+          </div>
+
+          <p class="eyebrow hero-meta">
+            <span>macOS / Windows / Linux</span>
+            <span class="meta-dot" aria-hidden="true">·</span>
+            <span>MIT License</span>
+            <span class="meta-dot" aria-hidden="true">·</span>
+            <a
+              data-ext="releases"
+              href="https://github.com/MayDay-wpf/snow-app/releases"
+              target="_blank"
+              rel="noreferrer"
+              data-i18n="hero.download"
+            >
+              下载 Snow App
+            </a>
+          </p>
+        </div>
+      </section>
+
+      <section
+        class="service"
+        id="service"
+        aria-label="服务说明"
+        data-i18n-aria="a11y.service"
+      >
+        <div class="wrap">
+          <div class="service-head">
+            <p class="eyebrow">Service</p>
+            <p class="service-head-note" data-i18n="service.note">
+              服务说明 · 充值 / 订阅 / 退款 / 数据策略
+            </p>
+          </div>
+
+          <div class="service-grid">
+            <div class="service-cell">
+              <p class="eyebrow">Reliability</p>
+              <p class="service-title" data-i18n="service.reliabilityTitle">
+                稳定、零数据保存、高效
+              </p>
+              <p class="service-desc" data-i18n="service.reliabilityDesc">
+                长期在线，请求不做额外留存。
+              </p>
+            </div>
+
+            <div class="service-cell">
+              <p class="eyebrow">Top-up</p>
+              <p class="service-title" data-i18n="service.topupTitle">
+                充值比例 1:1
+              </p>
+              <p class="service-desc" data-i18n="service.topupDesc">
+                充值多少，额度到账多少。
+              </p>
+            </div>
+
+            <div class="service-cell">
+              <p class="eyebrow">Refund</p>
+              <p class="service-title" data-i18n="service.refundTitle">
+                不限期无理由退余额
+              </p>
+              <p class="service-desc">
+                <span data-i18n="service.refundPrefix">退款请发送邮件至</span>
+                <a
+                  class="link-gold"
+                  data-mail
+                  href="mailto:maymay5jace@gmail.com"
+                  >maymay5jace@gmail.com</a
+                >
+              </p>
+            </div>
+          </div>
+
+          <div class="plans">
+            <div class="plan-card">
+              <p class="eyebrow">Snow GO</p>
+              <p class="plan-price">
+                $69<span class="plan-unit" data-i18n="service.perMonth"
+                  >/ 月</span
+                >
+              </p>
+              <ul class="plan-list">
+                <li data-i18n="service.goReset">每 5 小时重置 $20 额度</li>
+                <li data-i18n="service.goWeekly">每周重置 $140 额度</li>
+              </ul>
+              <a
+                class="btn btn-ghost btn-lg"
+                data-nav="wallet"
+                href="/wallet"
+                data-i18n="service.subscribe"
+                >立即订阅 →</a
+              >
+            </div>
+
+            <div class="plan-card is-featured">
+              <p class="eyebrow">Snow PRO</p>
+              <p class="plan-price">
+                $139<span class="plan-unit" data-i18n="service.perMonth"
+                  >/ 月</span
+                >
+              </p>
+              <ul class="plan-list">
+                <li data-i18n="service.proReset">每 5 小时重置 $40 额度</li>
+                <li data-i18n="service.proWeekly">每周重置 $300 额度</li>
+              </ul>
+              <a
+                class="btn btn-primary btn-lg"
+                data-nav="wallet"
+                href="/wallet"
+                data-i18n="service.subscribe"
+                >立即订阅 →</a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="workspace">
+        <div class="wrap">
+          <div class="reveal">
+            <p class="eyebrow">Workspace</p>
+            <h2 class="display h2" data-i18n-html="workspace.title">
+              Agent 的感官与手脚，<br />都在一个窗口里
+            </h2>
+            <p class="lede" data-i18n="workspace.description">
+              左侧是会话与项目，中间是 Agent
+              的对话与工具调用，右侧是它正在使用的浏览器、终端与
+              Git。这些面板不是并排的工具，而是同一份会话上下文的一部分。
+            </p>
+          </div>
+
+          <div
+            class="shot reveal"
+            role="img"
+            aria-label="Snow App 三栏工作区界面示意"
+            data-i18n-aria="a11y.shot"
+          >
+            <div class="shot-bar">
+              <span class="app-icon shot-icon" aria-hidden="true"></span>
+              <span class="shot-project">snow-cloud</span>
+              <span class="shot-branch">feat/users-pagination</span>
+            </div>
+
+            <div class="shot-body">
+              <aside class="shot-side">
+                <p class="shot-label" data-i18n="demo.sessionsLabel">会话</p>
+
+                <div class="shot-session is-active">
+                  <p class="shot-session-title" data-i18n="demo.s1Title">
+                    users 接口分页校验
+                  </p>
+                  <p class="shot-session-meta" data-i18n="demo.s1Meta">
+                    snow-cloud · 刚刚
+                  </p>
+                </div>
+                <div class="shot-session">
+                  <p class="shot-session-title" data-i18n="demo.s2Title">
+                    修复 SSH 断线重连
+                  </p>
+                  <p class="shot-session-meta" data-i18n="demo.s2Meta">
+                    snow-app · 2 小时前
+                  </p>
+                </div>
+                <div class="shot-session">
+                  <p class="shot-session-title" data-i18n="demo.s3Title">
+                    插件市场加筛选
+                  </p>
+                  <p class="shot-session-meta" data-i18n="demo.s3Meta">
+                    plugin-store · 昨天
+                  </p>
+                </div>
+                <div class="shot-session">
+                  <p class="shot-session-title" data-i18n="demo.s4Title">
+                    重构团队面板
+                  </p>
+                  <p class="shot-session-meta" data-i18n="demo.s4Meta">
+                    snow-app · 3 天前
+                  </p>
+                </div>
+
+                <div class="shot-mcp">
+                  <svg class="ico ico-sm"><use href="#i-blocks" /></svg>
+                  <span data-i18n="demo.mcp">MCP 3 已连接</span>
+                </div>
+              </aside>
+
+              <div class="shot-main">
+                <div class="shot-user" data-i18n="demo.user">
+                  把 users
+                  接口补上分页参数校验，顺手加一组用例，最后按仓库规范提交。
+                </div>
+
+                <div class="shot-steps">
+                  <div class="shot-step">
+                    <span class="shot-step-icon">
+                      <svg class="ico"><use href="#i-terminal" /></svg>
+                    </span>
+                    <div class="shot-step-body">
+                      <p class="shot-step-title" data-i18n="demo.terminal">
+                        终端
+                      </p>
+                      <p class="shot-code">npm run test -- users</p>
+                    </div>
+                    <span class="shot-pill is-ok">12 passed</span>
+                  </div>
+
+                  <div class="shot-step">
+                    <span class="shot-step-icon">
+                      <svg class="ico"><use href="#i-git" /></svg>
+                    </span>
+                    <div class="shot-step-body">
+                      <p class="shot-step-title">Git</p>
+                      <p class="shot-code" data-i18n="demo.branch">
+                        新建分支 feat/users-pagination
+                      </p>
+                    </div>
+                    <span class="shot-pill">main</span>
+                  </div>
+
+                  <div class="shot-step">
+                    <span class="shot-step-icon">
+                      <svg class="ico"><use href="#i-globe" /></svg>
+                    </span>
+                    <div class="shot-step-body">
+                      <p class="shot-step-title" data-i18n="demo.browser">
+                        浏览器
+                      </p>
+                      <p class="shot-code" data-i18n="demo.browserStep">
+                        打开 /console/users 核对分页
+                      </p>
+                    </div>
+                    <span class="shot-pill is-ok">200 OK</span>
+                  </div>
+                </div>
+
+                <p class="shot-reply">
+                  <span class="shot-reply-icon"
+                    ><svg class="ico"><use href="#i-message" /></svg
+                  ></span>
+                  <span data-i18n-html="demo.reply"
+                    >已在 <code>UsersController</code> 上补好
+                    <code>page/pageSize</code> 校验，新增 3
+                    个用例并全部通过，已提交到
+                    <code>feat/users-pagination</code></span
+                  ><span class="shot-caret"></span>
+                </p>
+
+                <div class="shot-input">
+                  <svg class="ico"><use href="#i-terminal" /></svg>
+                  <span data-i18n="demo.input"
+                    >继续输入指令，或拖入文件 / 截图…</span
+                  >
+                </div>
+              </div>
+
+              <div class="shot-panel">
+                <div class="shot-tabs">
+                  <span class="shot-tab">
+                    <svg class="ico"><use href="#i-globe" /></svg>
+                    <span data-i18n="demo.browser">浏览器</span>
+                  </span>
+                  <span class="shot-tab is-active">
+                    <svg class="ico"><use href="#i-terminal" /></svg>
+                    <span data-i18n="demo.terminal">终端</span>
+                  </span>
+                  <span class="shot-tab">
+                    <svg class="ico"><use href="#i-git" /></svg>
+                    Git
+                  </span>
+                </div>
+
+                <div class="shot-term">
+                  <span class="cmd">$ npm run dev</span>
+                  <span class="out"
+                    >&nbsp;&nbsp;➜&nbsp;&nbsp;Local: http://localhost:5173</span
+                  >
+                  <span class="out"
+                    >&nbsp;&nbsp;➜&nbsp;&nbsp;API&nbsp;&nbsp;&nbsp;→
+                    http://localhost:5080</span
+                  >
+                  <span class="cmd">$ git status</span>
+                  <span class="ok"
+                    >&nbsp;&nbsp;On branch feat/users-pagination</span
+                  >
+                </div>
+
+                <div class="shot-git">
+                  <p class="shot-label" data-i18n="demo.pending">待提交</p>
+                  <div class="shot-file">
+                    <span>UsersController.cs</span>
+                    <span class="shot-diff"
+                      ><span class="add">+24</span>
+                      <span class="del">-6</span></span
+                    >
+                  </div>
+                  <div class="shot-file">
+                    <span>UserService.cs</span>
+                    <span class="shot-diff"
+                      ><span class="add">+11</span>
+                      <span class="del">-3</span></span
+                    >
+                  </div>
+                  <div class="shot-file">
+                    <span>UsersPage.tsx</span>
+                    <span class="shot-diff"
+                      ><span class="add">+38</span>
+                      <span class="del">-12</span></span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="shot-status">
+              <span class="shot-status-item">
+                <span class="shot-dot"></span>
+                claude-sonnet-4.5
+              </span>
+              <span class="shot-status-item hide-sm">12.4k tokens</span>
+              <span class="shot-status-item hide-sm">
+                <svg class="ico ico-sm"><use href="#i-server" /></svg>
+                snow-cloud
+              </span>
+              <span class="shot-status-item push" data-i18n="demo.memory"
+                >项目记忆已注入</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="wrap">
+          <div class="reveal">
+            <p class="eyebrow">Capabilities</p>
+            <h2 class="display h2" data-i18n="features.title">
+              编码能力与扩展
+            </h2>
+            <p class="lede" data-i18n="features.description">
+              核心是一条编码循环：读代码、改文件、执行命令、查看诊断、验证结果。终端、检索与
+              Git 都在循环之内，技能与子代理按需接入。
+            </p>
+          </div>
+
+          <div class="feature-grid reveal">
+            <article class="feature">
+              <p class="eyebrow">01 / Coding Loop</p>
+              <h3 class="feature-title" data-i18n="features.item1.title">
+                编码循环
+              </h3>
+              <p class="feature-desc" data-i18n="features.item1.desc">
+                你描述任务，Agent
+                自己读代码、定位改动点、写文件、跑命令、看诊断，直到结果被验证——中间不用你搬运上下文。
+              </p>
+            </article>
+
+            <article class="feature">
+              <p class="eyebrow">02 / Codebase</p>
+              <h3 class="feature-title" data-i18n="features.item2.title">
+                代码库检索与诊断
+              </h3>
+              <p class="feature-desc" data-i18n="features.item2.desc">
+                先检索项目再动手：代码库索引帮它找到真正相关的位置，LSP
+                诊断让类型与编译错误当场暴露。
+              </p>
+            </article>
+
+            <article class="feature">
+              <p class="eyebrow">03 / Terminal</p>
+              <h3 class="feature-title" data-i18n="features.item3.title">
+                集成终端
+              </h3>
+              <p class="feature-desc" data-i18n="features.item3.desc">
+                真实 PTY 终端，多标签、工作目录跟随项目。Agent
+                在这里跑构建和测试，把输出接进下一轮推理。
+              </p>
+            </article>
+
+            <article class="feature">
+              <p class="eyebrow">04 / Git</p>
+              <h3 class="feature-title" data-i18n="features.item4.title">
+                Git 面板与改动审阅
+              </h3>
+              <p class="feature-desc" data-i18n="features.item4.desc">
+                状态、暂存、提交、分支与差异一屏可见，每处改动都能审阅、授权和回滚；提交前你说了算。
+              </p>
+            </article>
+
+            <article class="feature">
+              <p class="eyebrow">05 / SSH</p>
+              <h3 class="feature-title" data-i18n="features.item5.title">
+                SSH 远程工作区
+              </h3>
+              <p class="feature-desc" data-i18n="features.item5.desc">
+                把远程主机挂成工作区，文件浏览、终端与 Agent
+                会话都跑在远端上下文里，本地只留一个窗口。
+              </p>
+            </article>
+
+            <article class="feature">
+              <p class="eyebrow">06 / Browser</p>
+              <h3 class="feature-title" data-i18n="features.item6.title">
+                内置浏览器
+              </h3>
+              <p class="feature-desc" data-i18n="features.item6.desc">
+                Agent
+                可以打开页面、抓取内容、按步骤操作界面，再把结果带回对话——验证
+                Web 改动不用你截图复述。
+              </p>
+            </article>
+          </div>
+
+          <div class="metric-grid reveal">
+            <div class="metric">
+              <p
+                class="display metric-value"
+                data-i18n="features.metric1.value"
+              >
+                1 个循环
+              </p>
+              <p class="metric-label" data-i18n="features.metric1.label">
+                读代码 · 改文件 · 执行命令 · 验证结果
+              </p>
+            </div>
+            <div class="metric">
+              <p
+                class="display metric-value"
+                data-i18n="features.metric2.value"
+              >
+                同窗口
+              </p>
+              <p class="metric-label" data-i18n="features.metric2.label">
+                终端、Git、SSH、浏览器都是 Agent 的手脚
+              </p>
+            </div>
+            <div class="metric">
+              <p
+                class="display metric-value"
+                data-i18n="features.metric3.value"
+              >
+                3 端
+              </p>
+              <p class="metric-label" data-i18n="features.metric3.label">
+                macOS / Windows / Linux
+              </p>
+            </div>
+            <div class="metric">
+              <p
+                class="display metric-value"
+                data-i18n="features.metric4.value"
+              >
+                MIT
+              </p>
+              <p class="metric-label" data-i18n="features.metric4.label">
+                开源，可自建可魔改
+              </p>
+            </div>
+          </div>
+
+          <div class="extend-grid" id="extend">
+            <div class="extend-cell reveal">
+              <p class="eyebrow">Agents</p>
+              <h3 class="display extend-title" data-i18n="features.agentsTitle">
+                Agent 与协作
+              </h3>
+              <p class="extend-desc" data-i18n="features.agentsDesc">
+                技能、MCP 服务器与子代理扩展的是同一个
+                Agent；定时任务可以编排成多节点工作流，项目记忆按项目持久保存并自动注入。
+              </p>
+              <ul class="point-list">
+                <li>
+                  <svg class="ico"><use href="#i-bot" /></svg>
+                  <span data-i18n="features.collab1"
+                    >子代理并行执行，主会话保持干净</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-sparkles" /></svg>
+                  <span data-i18n="features.collab2"
+                    >Goal 模式让长任务自主推进，按预算收敛</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-package" /></svg>
+                  <span data-i18n="features.collab3"
+                    >Skills 技能与插件按需接入</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-route" /></svg>
+                  <span data-i18n="features.collab4"
+                    >Hooks 生命周期钩子，串联你的脚本</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-clock" /></svg>
+                  <span data-i18n="features.collab5"
+                    >定时任务与多节点工作流</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-brain" /></svg>
+                  <span data-i18n="features.collab6"
+                    >项目记忆按项目持久保存并自动注入</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-users" /></svg>
+                  <span data-i18n="features.collab7">团队协作</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="extend-cell reveal">
+              <p class="eyebrow">Security</p>
+              <h3
+                class="display extend-title"
+                data-i18n="features.securityTitle"
+              >
+                安全与体验
+              </h3>
+              <p class="extend-desc" data-i18n="features.securityDesc">
+                工具授权与隐私脱敏决定 Agent
+                能做什么、能看到什么；应用锁默认关闭，只遮盖界面而不加密磁盘数据。
+              </p>
+              <ul class="point-list">
+                <li>
+                  <svg class="ico"><use href="#i-shield" /></svg>
+                  <span data-i18n="features.security1"
+                    >工具授权决定 Agent 能做什么</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-eyeoff" /></svg>
+                  <span data-i18n="features.security2"
+                    >隐私脱敏决定 Agent 能看到什么</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-lock" /></svg>
+                  <span data-i18n="features.security3"
+                    >应用锁遮盖界面，PIN 仅存加盐哈希</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-history" /></svg>
+                  <span data-i18n="features.security4"
+                    >检查点与回滚，改动随时可退</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-phone" /></svg>
+                  <span data-i18n="features.security5"
+                    >手机远控，继续当前会话</span
+                  >
+                </li>
+                <li>
+                  <svg class="ico"><use href="#i-server" /></svg>
+                  <span data-i18n="features.security6"
+                    >用量与日志，每次工具调用都有记录</span
+                  >
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta" id="download">
+        <div class="wrap">
+          <div class="reveal">
+            <div
+              class="pixel-wordmark"
+              data-wordmark="SNOW APP"
+              role="img"
+              aria-label="SNOW APP"
+            ></div>
+
+            <h2 class="display cta-title" data-i18n-html="cta.title">
+              现在就让 Agent<br />接手第一个任务
+            </h2>
+            <p class="lede" data-i18n="cta.description">
+              下载后接上你已有的模型与项目即可开始。任务、工具调用与改动记录都留在本机，每一步都能审阅、授权和回滚。
+            </p>
+
+            <div class="cta-actions">
+              <a
+                class="btn btn-primary btn-lg"
+                data-nav="dashboard"
+                href="/dashboard"
+              >
+                <span data-i18n="cta.console">进入控制台</span>
+                <svg class="ico ico-sm"><use href="#i-arrow" /></svg>
+              </a>
+              <a
+                class="btn btn-ghost btn-lg"
+                data-nav="signIn"
+                href="/sign-in"
+                data-i18n="cta.signIn"
+                >登录 / 注册</a
+              >
+            </div>
+
+            <p class="eyebrow cta-meta">
+              <span>macOS / Windows / Linux</span>
+              <span class="meta-dot" aria-hidden="true">·</span>
+              <span>MIT License</span>
+              <span class="meta-dot" aria-hidden="true">·</span>
+              <span class="meta-nowrap">QQ 910298558</span>
+            </p>
+
+            <div class="cta-links">
+              <a data-nav="pricing" href="/pricing" data-i18n="cta.pricing"
+                >API 定价</a
+              >
+              <span>·</span>
+              <a
+                data-ext="releases"
+                href="https://github.com/MayDay-wpf/snow-app/releases"
+                target="_blank"
+                rel="noreferrer"
+                data-i18n="cta.download"
+                >下载 Snow App</a
+              >
+              <span>·</span>
+              <a
+                data-ext="github"
+                href="https://github.com/MayDay-wpf/snow-app"
+                target="_blank"
+                rel="noreferrer"
+                data-i18n="cta.source"
+                >查看源码</a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap">
+        <div class="footer-grid">
+          <div class="footer-brand">
+            <div class="footer-brand-row">
+              <span class="app-icon footer-icon" aria-hidden="true"></span>
+              <span data-brand-name>Snow App</span>
+            </div>
+            <p class="footer-blurb" data-i18n="footer.blurb">
+              桌面编码
+              Agent。你描述任务，它自己读代码、改文件、执行命令并验证结果；终端、Git、SSH
+              与浏览器都在同一个窗口里。
+            </p>
+            <p class="footer-note" data-i18n="footer.note">
+              Snow Cloud 控制台 · 稳定、零数据保存、高效 · 充值比例 1:1
+            </p>
+          </div>
+
+          <div class="footer-col">
+            <p class="eyebrow" data-i18n="footer.product">产品</p>
+            <ul>
+              <li>
+                <a href="#service" data-i18n="footer.service">服务说明</a>
+              </li>
+              <li>
+                <a href="#workspace" data-i18n="footer.workspace">工作台</a>
+              </li>
+              <li>
+                <a href="#features" data-i18n="footer.features">能力清单</a>
+              </li>
+              <li>
+                <a href="#extend" data-i18n="footer.extend">扩展与安全</a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <p class="eyebrow" data-i18n="footer.resources">资源</p>
+            <ul>
+              <li>
+                <a
+                  data-ext="docs"
+                  href="https://github.com/MayDay-wpf/snow-app/tree/main/docs"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-i18n="footer.docs"
+                  >使用文档</a
+                >
+              </li>
+              <li>
+                <a
+                  data-ext="github"
+                  href="https://github.com/MayDay-wpf/snow-app"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-i18n="footer.github"
+                  >GitHub 仓库</a
+                >
+              </li>
+              <li>
+                <a
+                  data-ext="issues"
+                  href="https://github.com/MayDay-wpf/snow-app/issues"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-i18n="footer.issues"
+                  >问题反馈</a
+                >
+              </li>
+              <li>
+                <a
+                  data-ext="releases"
+                  href="https://github.com/MayDay-wpf/snow-app/releases"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-i18n="footer.changelog"
+                  >更新日志</a
+                >
+              </li>
+            </ul>
+          </div>
+
+          <div class="footer-col">
+            <p class="eyebrow" data-i18n="footer.account">账户</p>
+            <ul>
+              <li>
+                <a
+                  data-nav="dashboard"
+                  href="/dashboard"
+                  data-i18n="footer.console"
+                  >进入控制台</a
+                >
+              </li>
+              <li>
+                <a data-nav="signIn" href="/sign-in" data-i18n="footer.signIn"
+                  >登录</a
+                >
+              </li>
+              <li>
+                <a data-nav="signUp" href="/sign-up" data-i18n="footer.signUp"
+                  >注册</a
+                >
+              </li>
+              <li>
+                <a data-nav="pricing" href="/pricing" data-i18n="footer.pricing"
+                  >API 定价</a
+                >
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="footer-bottom">
+          <p>© <span id="year">2026</span> Snow App · MIT License</p>
+          <p class="footer-bottom-links">
+            <a
+              data-ext="qq"
+              href="https://qm.qq.com/q/avnZQ7gw0M"
+              target="_blank"
+              rel="noreferrer"
+              >QQ 910298558</a
+            >
+            <span>·</span>
+            <a
+              data-ext="linuxDo"
+              href="https://linux.do"
+              target="_blank"
+              rel="noreferrer"
+              >Linux DO</a
+            >
+            <span>·</span>
+            <span
+              ><span data-i18n="footer.refundPrefix">退款联系</span>
+              <a data-mail href="mailto:maymay5jace@gmail.com"
+                >maymay5jace@gmail.com</a
+              ></span
+            >
+          </p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var CFG = window.SNOW_HOME || {};
+        var root = document.documentElement;
+        var embedded = root.classList.contains("is-embedded");
+        var reduced = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+
+        /* ------------------------------------------------------------------
+          文案：zh-CN / zh-TW / en 三语词典与语言判定
+         ------------------------------------------------------------------ */
+        var I18N = window.SNOW_HOME_I18N || {};
+        var LANG_KEY = "snow-home-lang";
+        var LANG_META = {
+          "zh-CN": { label: "简体中文", short: "简" },
+          "zh-TW": { label: "繁體中文", short: "繁" },
+          en: { label: "English", short: "EN" },
+        };
+
+        function normalizeLang(value) {
+          if (!value) return null;
+          var code = String(value).toLowerCase().replace(/_/g, "-");
+          // new-api 使用 zhCN / zhTW，浏览器使用 zh-CN / zh-TW / zh-Hant
+          if (code === "en" || code.indexOf("en-") === 0) return "en";
+          if (code.indexOf("zh") === 0)
+            return /(hant|tw|hk|mo)/.test(code) ? "zh-TW" : "zh-CN";
+          return null;
+        }
+
+        function detectLang() {
+          var query = null;
+          try {
+            query = new URLSearchParams(window.location.search).get("lang");
+          } catch (error) {}
+          var fromQuery = normalizeLang(query);
+          if (fromQuery) return fromQuery;
+
+          var stored = null;
+          try {
+            stored = localStorage.getItem(LANG_KEY);
+          } catch (error) {}
+          var fromStore = normalizeLang(stored);
+          if (fromStore) return fromStore;
+
+          var tag = "";
+          try {
+            tag =
+              (navigator.languages && navigator.languages[0]) ||
+              navigator.language ||
+              "";
+          } catch (error) {}
+          if (!tag) return "zh-CN";
+          return normalizeLang(tag) || "en";
+        }
+
+        function lookup(lang, key) {
+          var node = I18N[lang];
+          if (!node) return null;
+          var parts = key.split(".");
+          for (var i = 0; i < parts.length; i += 1) {
+            if (node == null) return null;
+            node = node[parts[i]];
+          }
+          return node;
+        }
+
+        var currentLang =
+          normalizeLang(window.SNOW_HOME_INITIAL_LANG) || detectLang();
+
+        function t(key) {
+          var value = lookup(currentLang, key);
+          if (typeof value !== "string") value = lookup("zh-CN", key);
+          if (typeof value !== "string") value = lookup("en", key);
+          return typeof value === "string" ? value : key;
+        }
+
+        /* ------------------------------------------------------------------
+          像素字标（App 欢迎页同款 5×7 点阵）
+         ------------------------------------------------------------------ */
+        var PIXEL = {
+          A: [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+          B: ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
+          C: [".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."],
+          D: ["####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."],
+          E: ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
+          F: ["#####", "#....", "#....", "####.", "#....", "#....", "#...."],
+          G: [".###.", "#...#", "#....", "#.###", "#...#", "#...#", ".###."],
+          H: ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
+          I: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "#####"],
+          J: ["..###", "...#.", "...#.", "...#.", "#..#.", "#..#.", ".##.."],
+          K: ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
+          L: ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
+          M: ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
+          N: ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"],
+          O: [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+          P: ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
+          Q: [".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#"],
+          R: ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
+          S: [".###.", "#...#", "#....", ".###.", "....#", "#...#", ".###."],
+          T: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
+          U: ["#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
+          V: ["#...#", "#...#", "#...#", "#...#", "#...#", ".#.#.", "..#.."],
+          W: ["#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"],
+          X: ["#...#", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "#...#"],
+          Y: ["#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."],
+          Z: ["#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"],
+          0: [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
+          1: ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", "#####"],
+          2: [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
+          3: ["####.", "....#", "....#", ".###.", "....#", "....#", "####."],
+          4: ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
+          5: ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
+          6: ["..##.", ".#...", "#....", "####.", "#...#", "#...#", ".###."],
+          7: ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
+          8: [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
+          9: [".###.", "#...#", "#...#", ".####", "....#", "...#.", ".##.."],
+          "-": [".....", ".....", ".....", "#####", ".....", ".....", "....."],
+          ".": [".....", ".....", ".....", ".....", ".....", ".....", "..#.."],
+          "/": ["....#", "...#.", "...#.", "..#..", ".#...", ".#...", "#...."],
+          " ": [".....", ".....", ".....", ".....", ".....", ".....", "....."],
+        };
+
+        var SVG_NS = "http://www.w3.org/2000/svg";
+
+        function buildWordmark(element, text) {
+          var upper = String(text || "SNOW APP").toUpperCase();
+          var chars = Array.from(upper);
+          var supported = chars.every(function (char) {
+            return Object.prototype.hasOwnProperty.call(PIXEL, char);
+          });
+
+          if (!supported) {
+            element.textContent = upper;
+            element.classList.add("pixel-fallback");
+            return;
+          }
+
+          var gap = 1;
+          var width = chars.length * 5 + Math.max(0, chars.length - 1) * gap;
+          var svg = document.createElementNS(SVG_NS, "svg");
+          svg.setAttribute("viewBox", "0 0 " + width + " 7");
+          svg.setAttribute("preserveAspectRatio", "xMinYMid meet");
+          svg.setAttribute("role", "img");
+          svg.setAttribute("aria-label", upper);
+          svg.setAttribute("shape-rendering", "crispEdges");
+
+          chars.forEach(function (char, charIndex) {
+            var glyph = PIXEL[char] || PIXEL[" "];
+            glyph.forEach(function (row, rowIndex) {
+              row.split("").forEach(function (cell, colIndex) {
+                if (cell !== "#") return;
+                var rect = document.createElementNS(SVG_NS, "rect");
+                rect.setAttribute(
+                  "x",
+                  String(charIndex * (5 + gap) + colIndex),
+                );
+                rect.setAttribute("y", String(rowIndex));
+                rect.setAttribute("width", "1");
+                rect.setAttribute("height", "1");
+                rect.setAttribute("fill", "currentColor");
+                rect.setAttribute("class", "pixel-cell");
+                rect.style.animationDelay =
+                  rowIndex * 90 +
+                  ((charIndex * 13 + rowIndex * 29 + colIndex * 7) % 90) +
+                  "ms";
+                svg.appendChild(rect);
+              });
+            });
+          });
+
+          element.textContent = "";
+          element.appendChild(svg);
+        }
+
+        /* ------------------------------------------------------------------
+         品牌名 / 链接 / 邮件
+         ------------------------------------------------------------------ */
+        var brandName = CFG.brandName || "Snow App";
+        document
+          .querySelectorAll("[data-brand-name]")
+          .forEach(function (element) {
+            element.textContent = brandName;
+          });
+
+        document
+          .querySelectorAll("[data-wordmark]")
+          .forEach(function (element) {
+            var text =
+              CFG.wordmark ||
+              element.getAttribute("data-wordmark") ||
+              "SNOW APP";
+            element.setAttribute("aria-label", text);
+            buildWordmark(element, text);
+          });
+
+        // 动画兜底：无论动画是否被浏览器暂停，最终都要显示完整字标
+        window.setTimeout(function () {
+          document
+            .querySelectorAll(".pixel-wordmark")
+            .forEach(function (element) {
+              element.classList.add("pixel-ready");
+            });
+        }, 1400);
+
+        var origin = String(CFG.newApiOrigin || "").replace(/\/+$/, "");
+        var routes = CFG.routes || {};
+        var links = CFG.links || {};
+
+        document.querySelectorAll("[data-nav]").forEach(function (anchor) {
+          var path = routes[anchor.getAttribute("data-nav")];
+          if (path) anchor.setAttribute("href", origin + path);
+          if (embedded) anchor.setAttribute("target", "_top");
+        });
+
+        document.querySelectorAll("[data-ext]").forEach(function (anchor) {
+          var link = links[anchor.getAttribute("data-ext")];
+          if (link) anchor.setAttribute("href", link);
+          anchor.setAttribute("target", "_blank");
+          anchor.setAttribute("rel", "noreferrer");
+        });
+
+        document.querySelectorAll("[data-mail]").forEach(function (anchor) {
+          anchor.setAttribute(
+            "href",
+            "mailto:" + (CFG.refundEmail || "maymay5jace@gmail.com"),
+          );
+        });
+
+        var year = document.getElementById("year");
+        if (year) year.textContent = String(new Date().getFullYear());
+
+        /* ------------------------------------------------------------------
+         主题：系统偏好 → 手动切换 → new-api 父窗口 postMessage
+         ------------------------------------------------------------------ */
+        var THEME_KEY = "snow-home-theme";
+        var themeButton = document.getElementById("themeToggle");
+        var manualTheme = null;
+
+        try {
+          var storedTheme = localStorage.getItem(THEME_KEY);
+          if (storedTheme === "light" || storedTheme === "dark")
+            manualTheme = storedTheme;
+        } catch (error) {}
+
+        function applyTheme(theme, silent) {
+          root.setAttribute("data-theme", theme);
+          root.style.colorScheme = theme;
+
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta)
+            meta.setAttribute(
+              "content",
+              theme === "light" ? "#faf9f7" : "#0a0a0a",
+            );
+
+          if (themeButton) {
+            themeButton.setAttribute(
+              "aria-label",
+              t(theme === "light" ? "a11y.themeToDark" : "a11y.themeToLight"),
+            );
+          }
+
+          if (!silent) {
+            window.dispatchEvent(
+              new CustomEvent("themechange", { detail: theme }),
+            );
+          }
+        }
+
+        applyTheme(
+          root.getAttribute("data-theme") === "light" ? "light" : "dark",
+          true,
+        );
+
+        if (themeButton) {
+          themeButton.addEventListener("click", function () {
+            var next =
+              root.getAttribute("data-theme") === "light" ? "dark" : "light";
+            manualTheme = next;
+            try {
+              localStorage.setItem(THEME_KEY, next);
+            } catch (error) {}
+            applyTheme(next);
+          });
+        }
+
+        // new-api 会用 iframe.contentWindow.postMessage 下发主题与语言
+        window.addEventListener("message", function (event) {
+          var data = event.data;
+          if (!data || typeof data !== "object") return;
+
+          if (data.themeMode === "light" || data.themeMode === "dark") {
+            manualTheme = null;
+            applyTheme(data.themeMode);
+          }
+
+          if (typeof data.lang === "string" && data.lang) {
+            var nextLang = normalizeLang(data.lang) || "en";
+            if (nextLang !== currentLang) applyLanguage(nextLang, true);
+          }
+        });
+
+        var lightQuery = window.matchMedia("(prefers-color-scheme: light)");
+        function handleSystemTheme() {
+          if (manualTheme) return;
+          applyTheme(lightQuery.matches ? "light" : "dark");
+        }
+        if (lightQuery.addEventListener)
+          lightQuery.addEventListener("change", handleSystemTheme);
+        else if (lightQuery.addListener)
+          lightQuery.addListener(handleSystemTheme);
+
+        /* ------------------------------------------------------------------
+         导航：滚动描边 + 移动端菜单
+         ------------------------------------------------------------------ */
+        var siteNav = document.getElementById("siteNav");
+        function handleScroll() {
+          if (!siteNav) return;
+          siteNav.classList.toggle("is-scrolled", window.scrollY > 8);
+        }
+        handleScroll();
+        window.addEventListener("scroll", handleScroll, { passive: true });
+
+        var menuButton = document.getElementById("menuToggle");
+        var mobileMenu = document.getElementById("mobileMenu");
+
+        function setMenu(open) {
+          if (!menuButton || !mobileMenu) return;
+          mobileMenu.hidden = !open;
+          menuButton.setAttribute("aria-expanded", open ? "true" : "false");
+          menuButton.setAttribute(
+            "aria-label",
+            t(open ? "a11y.closeMenu" : "a11y.openMenu"),
+          );
+          document.body.classList.toggle("menu-open", open);
+          var use = menuButton.querySelector("use");
+          if (use) use.setAttribute("href", open ? "#i-x" : "#i-menu");
+        }
+
+        if (menuButton) {
+          menuButton.addEventListener("click", function () {
+            setMenu(mobileMenu ? mobileMenu.hidden : false);
+          });
+        }
+
+        if (mobileMenu) {
+          mobileMenu.querySelectorAll("a").forEach(function (anchor) {
+            anchor.addEventListener("click", function () {
+              setMenu(false);
+            });
+          });
+        }
+
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") setMenu(false);
+        });
+
+        window.addEventListener("resize", function () {
+          if (window.innerWidth > 900) setMenu(false);
+        });
+
+        /* ------------------------------------------------------------------
+          语言切换：应用文案、更新 <html lang> / 标题 / 描述
+         ------------------------------------------------------------------ */
+        var langButton = document.getElementById("langToggle");
+        var langMenu = document.getElementById("langMenu");
+
+        function applyLanguage(lang, silent) {
+          currentLang = normalizeLang(lang) || "zh-CN";
+          root.lang = currentLang;
+
+          document.title = t("meta.title");
+          var description = document.querySelector('meta[name="description"]');
+          if (description)
+            description.setAttribute("content", t("meta.description"));
+
+          document.querySelectorAll("[data-i18n]").forEach(function (element) {
+            var value = t(element.getAttribute("data-i18n"));
+            if (typeof value === "string") element.textContent = value;
+          });
+          document
+            .querySelectorAll("[data-i18n-html]")
+            .forEach(function (element) {
+              var value = t(element.getAttribute("data-i18n-html"));
+              if (typeof value === "string") element.innerHTML = value;
+            });
+          document
+            .querySelectorAll("[data-i18n-aria]")
+            .forEach(function (element) {
+              var value = t(element.getAttribute("data-i18n-aria"));
+              if (typeof value === "string")
+                element.setAttribute("aria-label", value);
+            });
+
+          var langMeta = LANG_META[currentLang] || LANG_META["zh-CN"];
+          document
+            .querySelectorAll("[data-lang-current]")
+            .forEach(function (element) {
+              element.textContent = langMeta.short;
+            });
+          document
+            .querySelectorAll("[data-lang-option]")
+            .forEach(function (element) {
+              var active =
+                element.getAttribute("data-lang-option") === currentLang;
+              element.classList.toggle("is-active", active);
+              element.setAttribute("aria-selected", active ? "true" : "false");
+            });
+
+          if (themeButton) {
+            themeButton.setAttribute(
+              "aria-label",
+              t(
+                root.getAttribute("data-theme") === "light"
+                  ? "a11y.themeToDark"
+                  : "a11y.themeToLight",
+              ),
+            );
+          }
+          if (menuButton) {
+            var menuOpen = menuButton.getAttribute("aria-expanded") === "true";
+            menuButton.setAttribute(
+              "aria-label",
+              t(menuOpen ? "a11y.closeMenu" : "a11y.openMenu"),
+            );
+          }
+
+          if (!silent) {
+            document.dispatchEvent(
+              new CustomEvent("languagechange", { detail: currentLang }),
+            );
+          }
+        }
+
+        function setLangMenu(open) {
+          if (!langButton || !langMenu) return;
+          langMenu.hidden = !open;
+          langButton.setAttribute("aria-expanded", open ? "true" : "false");
+          if (open) {
+            var active = langMenu.querySelector(
+              '[data-lang-option="' + currentLang + '"]',
+            );
+            if (active) active.focus();
+          }
+        }
+
+        if (langButton && langMenu) {
+          langButton.addEventListener("click", function (event) {
+            event.stopPropagation();
+            setLangMenu(langMenu.hidden);
+          });
+
+          langMenu
+            .querySelectorAll("[data-lang-option]")
+            .forEach(function (option) {
+              option.addEventListener("click", function () {
+                var code = normalizeLang(
+                  option.getAttribute("data-lang-option"),
+                );
+                if (!code) return;
+                applyLanguage(code, false);
+                try {
+                  localStorage.setItem(LANG_KEY, code);
+                } catch (error) {}
+                setLangMenu(false);
+                langButton.focus();
+              });
+            });
+        }
+
+        document.addEventListener("click", function (event) {
+          if (!langMenu || langMenu.hidden) return;
+          if (langMenu.contains(event.target)) return;
+          if (langButton && langButton.contains(event.target)) return;
+          setLangMenu(false);
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (event.key !== "Escape" || !langMenu || langMenu.hidden) return;
+          setLangMenu(false);
+          if (langButton) langButton.focus();
+        });
+
+        window.addEventListener("resize", function () {
+          if (langMenu && !langMenu.hidden) setLangMenu(false);
+        });
+
+        applyLanguage(currentLang, true);
+
+        /* ------------------------------------------------------------------
+          滚动入场
+         ------------------------------------------------------------------ */
+        var reveals = Array.prototype.slice.call(
+          document.querySelectorAll(".reveal"),
+        );
+        if (reduced || !("IntersectionObserver" in window)) {
+          reveals.forEach(function (element) {
+            element.classList.add("is-visible");
+          });
+        } else {
+          var observer = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                entry.target.classList.add("is-visible");
+                observer.unobserve(entry.target);
+              });
+            },
+            { rootMargin: "0px 0px -8% 0px", threshold: 0.08 },
+          );
+          reveals.forEach(function (element) {
+            observer.observe(element);
+          });
+        }
+
+        /* ------------------------------------------------------------------
+         金沙粒子（移植自 snow-cloud 的 GoldParticles）
+         ------------------------------------------------------------------ */
+        (function initSand() {
+          var canvas = document.getElementById("sand");
+          if (!canvas) return;
+          var context = canvas.getContext("2d");
+          if (!context) return;
+
+          var ctx = context;
+          var DARK_TINTS = [
+            [255, 246, 224],
+            [247, 230, 187],
+            [233, 200, 124],
+            [214, 172, 92],
+            [186, 136, 58],
+          ];
+          var LIGHT_TINTS = [
+            [196, 154, 74],
+            [176, 128, 44],
+            [138, 95, 16],
+            [120, 84, 20],
+            [96, 66, 10],
+          ];
+
+          var SPRITE_SIZE = 24;
+          var SHAPES_PER_TINT = 2;
+          var BANDS = 7;
+
+          var width = 0;
+          var height = 0;
+          var grains = [];
+          var sprites = [];
+          var raf = 0;
+          var previous = 0;
+          var elapsed = 0;
+          var blend = "lighter";
+          var light = false;
+          var density = 9;
+
+          function createSprites(tints) {
+            var created = [];
+            for (var t = 0; t < tints.length; t += 1) {
+              var rgb = tints[t];
+              for (var shape = 0; shape < SHAPES_PER_TINT; shape += 1) {
+                var sprite = document.createElement("canvas");
+                sprite.width = SPRITE_SIZE;
+                sprite.height = SPRITE_SIZE;
+                var spriteCtx = sprite.getContext("2d");
+                if (!spriteCtx) continue;
+
+                var center = SPRITE_SIZE / 2;
+                var blobs = 3 + Math.floor(Math.random() * 4);
+
+                for (var i = 0; i < blobs; i += 1) {
+                  var radius = SPRITE_SIZE * (0.07 + Math.random() * 0.13);
+                  var x = center + (Math.random() - 0.5) * SPRITE_SIZE * 0.44;
+                  var y = center + (Math.random() - 0.5) * SPRITE_SIZE * 0.44;
+                  var gradient = spriteCtx.createRadialGradient(
+                    x,
+                    y,
+                    0,
+                    x,
+                    y,
+                    radius,
+                  );
+                  gradient.addColorStop(
+                    0,
+                    "rgba(" +
+                      rgb[0] +
+                      ", " +
+                      rgb[1] +
+                      ", " +
+                      rgb[2] +
+                      ", 0.95)",
+                  );
+                  gradient.addColorStop(
+                    0.5,
+                    "rgba(" +
+                      rgb[0] +
+                      ", " +
+                      rgb[1] +
+                      ", " +
+                      rgb[2] +
+                      ", 0.45)",
+                  );
+                  gradient.addColorStop(
+                    1,
+                    "rgba(" + rgb[0] + ", " + rgb[1] + ", " + rgb[2] + ", 0)",
+                  );
+                  spriteCtx.fillStyle = gradient;
+                  spriteCtx.beginPath();
+                  spriteCtx.arc(x, y, radius, 0, Math.PI * 2);
+                  spriteCtx.fill();
+                }
+
+                created.push(sprite);
+              }
+            }
+            return created;
+          }
+
+          function spawnY() {
+            if (Math.random() < 0.28) return Math.random() * height;
+            var band = Math.floor(Math.random() * BANDS);
+            var base = ((band + 0.5) / BANDS) * height;
+            return base + (Math.random() - 0.5) * (height / BANDS) * 0.8;
+          }
+
+          function flowAngle(x, y, t) {
+            var bandIndex = Math.floor((y / Math.max(1, height)) * BANDS);
+            return (
+              -0.05 +
+              Math.sin(x * 0.0013 + t * 0.2 + bandIndex * 1.1) * 0.22 +
+              Math.cos(y * 0.0022 - t * 0.16) * 0.1
+            );
+          }
+
+          function makeGrains(count) {
+            var list = [];
+            for (var i = 0; i < count; i += 1) {
+              var big = Math.random() < 0.04;
+              var size = big
+                ? 7 + Math.random() * 11
+                : 1.2 + Math.random() * 3.2;
+              var hasGlint = !big && Math.random() < 0.14;
+              var alpha = big
+                ? (light ? 0.03 : 0.04) + Math.random() * 0.05
+                : (light ? 0.1 : 0.07) + Math.random() * (light ? 0.2 : 0.2);
+              list.push({
+                x: Math.random() * width,
+                y: spawnY(),
+                speed: (28 + Math.random() * 96) * (big ? 1.35 : 1),
+                size: size,
+                sprite: Math.floor(Math.random() * sprites.length),
+                alpha: alpha,
+                phase: Math.random() * Math.PI * 2,
+                breathSpeed: 0.15 + Math.random() * 0.4,
+                glintSpeed: 0.35 + Math.random() * 0.7,
+                glintPhase: Math.random() * Math.PI * 2,
+                hasGlint: hasGlint,
+              });
+            }
+            return list;
+          }
+
+          function resize() {
+            var rect = canvas.getBoundingClientRect();
+            var dpr = Math.min(window.devicePixelRatio || 1, 2);
+            width = rect.width;
+            height = rect.height;
+            canvas.width = Math.max(1, Math.floor(width * dpr));
+            canvas.height = Math.max(1, Math.floor(height * dpr));
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            var count = Math.round(((width * height) / 10000) * density);
+            grains = makeGrains(Math.max(120, Math.min(count, 1500)));
+          }
+
+          function draw(t, withTrail) {
+            if (withTrail) {
+              ctx.globalCompositeOperation = "destination-out";
+              ctx.fillStyle = light
+                ? "rgba(0, 0, 0, 0.2)"
+                : "rgba(0, 0, 0, 0.17)";
+              ctx.fillRect(0, 0, width, height);
+            } else {
+              ctx.clearRect(0, 0, width, height);
+            }
+
+            ctx.globalCompositeOperation = blend;
+
+            for (var i = 0; i < grains.length; i += 1) {
+              var grain = grains[i];
+              var breath =
+                0.8 + 0.2 * Math.sin(t * grain.breathSpeed + grain.phase);
+              var glint = 0;
+              if (grain.hasGlint) {
+                var wave = Math.sin(t * grain.glintSpeed + grain.glintPhase);
+                glint = wave > 0.88 ? (wave - 0.88) / 0.12 : 0;
+              }
+
+              var alpha = Math.min(1, grain.alpha * breath + glint * 0.42);
+              if (alpha <= 0.004) continue;
+
+              var half = grain.size / 2;
+              ctx.globalAlpha = alpha;
+              ctx.drawImage(
+                sprites[grain.sprite],
+                grain.x - half,
+                grain.y - half,
+                grain.size,
+                grain.size,
+              );
+            }
+
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = "source-over";
+          }
+
+          function step(now) {
+            var delta = Math.min(32, now - previous) / 1000;
+            previous = now;
+            elapsed += delta;
+
+            for (var i = 0; i < grains.length; i += 1) {
+              var grain = grains[i];
+              var angle = flowAngle(grain.x, grain.y, elapsed);
+              grain.x += Math.cos(angle) * grain.speed * delta;
+              grain.y += Math.sin(angle) * grain.speed * delta;
+
+              if (grain.x > width + 30) {
+                grain.x = -30;
+                grain.y = spawnY();
+              }
+              if (grain.y < -30) grain.y = height + 30;
+              else if (grain.y > height + 30) grain.y = -30;
+            }
+
+            draw(elapsed, true);
+            raf = window.requestAnimationFrame(step);
+          }
+
+          function start() {
+            light = root.getAttribute("data-theme") === "light";
+            blend = light ? "source-over" : "lighter";
+            density = light ? 5 : 9;
+            sprites = createSprites(light ? LIGHT_TINTS : DARK_TINTS);
+            if (!sprites.length) return;
+
+            window.cancelAnimationFrame(raf);
+            resize();
+
+            if (reduced) {
+              draw(0, false);
+            } else {
+              previous = window.performance.now();
+              raf = window.requestAnimationFrame(step);
+            }
+          }
+
+          function handleResize() {
+            resize();
+            if (reduced) draw(0, false);
+          }
+
+          window.addEventListener("resize", handleResize);
+          window.addEventListener("themechange", start);
+          document.addEventListener("visibilitychange", function () {
+            if (document.hidden) {
+              window.cancelAnimationFrame(raf);
+              raf = 0;
+            } else if (!reduced && !raf) {
+              previous = window.performance.now();
+              raf = window.requestAnimationFrame(step);
+            }
+          });
+
+          start();
+        })();
+
+        /* ------------------------------------------------------------------
+         首屏右侧：粒子 Logo（雪花 + 终端气泡，取自站点图标）
+         ------------------------------------------------------------------ */
+        (function initLogoParticles() {
+          var canvas = document.getElementById("logoSand");
+          if (!canvas) return;
+          var ctx = canvas.getContext("2d");
+          if (!ctx) return;
+
+          var TAU = Math.PI * 2;
+          var dpr = 1;
+          var width = 0;
+          var height = 0;
+          var particles = [];
+          var xs = null;
+          var ys = null;
+          var alphas = null;
+          var raf = 0;
+          var previous = 0;
+          var elapsed = 0;
+          var light = root.getAttribute("data-theme") === "light";
+          var palette = null;
+          var tiltX = 0;
+          var tiltY = 0;
+          var targetTiltX = 0;
+          var targetTiltY = 0;
+
+          var DARK = {
+            core: "#f0d59c",
+            deep: "#c9a45a",
+            halo: "rgba(233, 200, 124, 0.20)",
+          };
+          var LIGHT = {
+            core: "#8a5f10",
+            deep: "#b07a1e",
+            halo: "rgba(138, 95, 16, 0.16)",
+          };
+
+          function readPalette() {
+            light = root.getAttribute("data-theme") === "light";
+            palette = light ? LIGHT : DARK;
+          }
+
+          function iconUrl() {
+            var probe = document.createElement("span");
+            probe.className = "app-icon";
+            probe.setAttribute("aria-hidden", "true");
+            probe.style.cssText =
+              "position:absolute;left:-9999px;top:0;width:8px;height:8px;visibility:hidden;";
+            document.body.appendChild(probe);
+            var bg = window.getComputedStyle(probe).backgroundImage || "";
+            document.body.removeChild(probe);
+            var match = bg.match(/url\(["']?(data:image\/[^"')]+)["']?\)/);
+            return match ? match[1] : "";
+          }
+
+          function build(raw) {
+            var minX = 1e9;
+            var minY = 1e9;
+            var maxX = -1e9;
+            var maxY = -1e9;
+            for (var i = 0; i < raw.length; i += 1) {
+              if (raw[i].x < minX) minX = raw[i].x;
+              if (raw[i].x > maxX) maxX = raw[i].x;
+              if (raw[i].y < minY) minY = raw[i].y;
+              if (raw[i].y > maxY) maxY = raw[i].y;
+            }
+            var span = Math.max(maxX - minX, maxY - minY) || 1;
+            var cx = (minX + maxX) / 2;
+            var cy = (minY + maxY) / 2;
+            particles = raw.map(function (point) {
+              var fx = (point.x - cx) / span;
+              var fy = (point.y - cy) / span;
+              return {
+                fx: fx,
+                fy: fy,
+                size: 0.9 + Math.random() * 1.5,
+                alpha: 0.34 + Math.random() * 0.56,
+                tone: Math.random(),
+                phase: Math.random() * TAU,
+                twinkle: Math.random() * TAU,
+                speed: 0.55 + Math.random() * 1.1,
+                drift: 0.4 + Math.random() * 1.5,
+                spark: Math.random() < 0.1,
+                delay: Math.random() * 0.35,
+                sx: (Math.random() - 0.5) * 1.0,
+                sy: (Math.random() - 0.5) * 1.0,
+              };
+            });
+            xs = new Float32Array(particles.length);
+            ys = new Float32Array(particles.length);
+            alphas = new Float32Array(particles.length);
+          }
+
+          function sample(image) {
+            var size = 256;
+            var off = document.createElement("canvas");
+            off.width = size;
+            off.height = size;
+            var octx = off.getContext("2d", { willReadFrequently: true });
+            if (!octx) return;
+            octx.drawImage(image, 0, 0, size, size);
+            var data;
+            try {
+              data = octx.getImageData(0, 0, size, size).data;
+            } catch (error) {
+              return;
+            }
+            var raw = [];
+            for (var y = 0; y < size; y += 2) {
+              for (var x = 0; x < size; x += 2) {
+                var i = (y * size + x) * 4;
+                var r = data[i];
+                var g = data[i + 1];
+                var b = data[i + 2];
+                var a = data[i + 3];
+                if (a > 120 && b - r > 24 && g - r > 8) {
+                  raw.push({ x: x, y: y });
+                }
+              }
+            }
+            if (!raw.length) return;
+            build(raw);
+            resize();
+            if (reduced) {
+              draw(0, true);
+            } else {
+              start();
+            }
+          }
+
+          function resize() {
+            var rect = canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) {
+              width = 0;
+              height = 0;
+              return;
+            }
+            dpr = Math.min(window.devicePixelRatio || 1, 2);
+            width = rect.width;
+            height = rect.height;
+            canvas.width = Math.max(1, Math.floor(width * dpr));
+            canvas.height = Math.max(1, Math.floor(height * dpr));
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            if (reduced && particles.length) draw(0, true);
+          }
+
+          function draw(t, still) {
+            if (!width || !height || !particles.length) return;
+            var size = Math.min(width, height);
+            var cx = width / 2;
+            var cy = height / 2;
+            var target = size * 0.84;
+            var rot = Math.sin(t * 0.00018) * 0.032 + tiltX;
+            var scale = 1 + Math.sin(t * 0.0008) * 0.012;
+            var cos = Math.cos(rot);
+            var sin = Math.sin(rot);
+            var offsetY = tiltY * size * 0.1;
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.globalCompositeOperation = light ? "source-over" : "lighter";
+
+            ctx.fillStyle = palette.halo;
+            for (var i = 0; i < particles.length; i += 1) {
+              var p = particles[i];
+              var local = still
+                ? 1
+                : Math.min(1, Math.max(0, (t - 0.3 - p.delay) / 1.05));
+              var pe = 1 - Math.pow(1 - local, 3);
+              var bx = p.fx * target * scale;
+              var by = p.fy * target * scale;
+              var x =
+                cx +
+                bx * cos -
+                by * sin +
+                Math.sin(t * 0.0011 * p.speed + p.phase) * p.drift +
+                p.sx * target * (1 - pe);
+              var y =
+                cy +
+                offsetY +
+                bx * sin +
+                by * cos +
+                Math.cos(t * 0.0013 * p.speed + p.phase) * p.drift +
+                p.sy * target * (1 - pe);
+              var twinkle = 0.78 + 0.22 * Math.sin(t * 0.0016 + p.twinkle);
+              var alpha = p.alpha * twinkle * (0.15 + 0.85 * pe);
+              if (p.spark) {
+                var sparkle = Math.max(0, Math.sin(t * 0.002 + p.twinkle));
+                alpha = Math.min(1, alpha + sparkle * 0.35 * pe);
+              }
+              xs[i] = x;
+              ys[i] = y;
+              alphas[i] = alpha;
+
+              ctx.globalAlpha = alpha * 0.42;
+              ctx.beginPath();
+              ctx.arc(x, y, p.size * 2.6, 0, TAU);
+              ctx.fill();
+            }
+
+            var len = particles.length;
+            ctx.fillStyle = palette.core;
+            for (var j = 0; j < len; j += 1) {
+              if (particles[j].tone < 0.34) continue;
+              ctx.globalAlpha = alphas[j];
+              ctx.beginPath();
+              ctx.arc(xs[j], ys[j], particles[j].size, 0, TAU);
+              ctx.fill();
+            }
+
+            ctx.fillStyle = palette.deep;
+            for (var k = 0; k < len; k += 1) {
+              if (particles[k].tone >= 0.34) continue;
+              ctx.globalAlpha = alphas[k];
+              ctx.beginPath();
+              ctx.arc(xs[k], ys[k], particles[k].size, 0, TAU);
+              ctx.fill();
+            }
+
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = "source-over";
+          }
+
+          function step(now) {
+            var delta = Math.min(32, now - previous) / 1000;
+            previous = now;
+            elapsed += delta;
+            tiltX += (targetTiltX - tiltX) * 0.045;
+            tiltY += (targetTiltY - tiltY) * 0.045;
+            draw(elapsed, false);
+            raf = window.requestAnimationFrame(step);
+          }
+
+          function start() {
+            window.cancelAnimationFrame(raf);
+            raf = 0;
+            if (reduced || width === 0) return;
+            previous = window.performance.now();
+            raf = window.requestAnimationFrame(step);
+          }
+
+          function pause() {
+            window.cancelAnimationFrame(raf);
+            raf = 0;
+          }
+
+          function handleResize() {
+            var hadWidth = width;
+            resize();
+            if (reduced) {
+              if (width && particles.length) draw(elapsed, true);
+              return;
+            }
+            if (width > 0 && !raf && !document.hidden) {
+              if (!hadWidth) elapsed = 0;
+              start();
+            } else if (width === 0) {
+              pause();
+            }
+          }
+
+          readPalette();
+          var source = iconUrl();
+          if (!source) return;
+          var image = new Image();
+          image.onload = function () {
+            sample(image);
+          };
+          image.onerror = function () {};
+          image.src = source;
+
+          window.addEventListener("resize", handleResize);
+          window.addEventListener("themechange", function () {
+            readPalette();
+            if (reduced && particles.length) draw(elapsed, true);
+          });
+          document.addEventListener("visibilitychange", function () {
+            if (document.hidden) pause();
+            else if (!reduced && !raf && width > 0) start();
+          });
+
+          var hero = canvas.closest(".hero");
+          if (
+            hero &&
+            !reduced &&
+            window.matchMedia &&
+            window.matchMedia("(hover: hover)").matches
+          ) {
+            hero.addEventListener("pointermove", function (event) {
+              var rect = hero.getBoundingClientRect();
+              targetTiltX =
+                ((event.clientX - rect.left) / Math.max(1, rect.width) - 0.5) *
+                0.06;
+              targetTiltY =
+                ((event.clientY - rect.top) / Math.max(1, rect.height) - 0.5) *
+                0.06;
+            });
+            hero.addEventListener("pointerleave", function () {
+              targetTiltX = 0;
+              targetTiltY = 0;
+            });
+          }
+        })();
+      })();
+    </script>
+  </body>
+</html>

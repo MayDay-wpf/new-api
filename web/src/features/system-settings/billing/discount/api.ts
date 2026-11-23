@@ -20,6 +20,19 @@ import { api } from '@/lib/api'
 
 export type DiscountMatchMode = 'any' | 'all'
 export type DiscountUAMatch = 'contains' | 'exact'
+export type DiscountSchedulePeriod = 'daily' | 'weekly' | 'monthly'
+
+/**
+ * Repeating activation window of a discount rule. Every field may stay empty,
+ * and a rule without a schedule applies unconditionally.
+ */
+export type DiscountSchedule = {
+  timezone: string
+  weekdays: number[]
+  month_days: number[]
+  start_time: string
+  end_time: string
+}
 
 export type DiscountRule = {
   name: string
@@ -30,6 +43,7 @@ export type DiscountRule = {
   user_agents: string[]
   match_mode: DiscountMatchMode
   ua_match: DiscountUAMatch
+  schedule: DiscountSchedule | null
 }
 
 export type RecentUserAgent = {
@@ -64,10 +78,55 @@ export function parseDiscountRules(raw: string | undefined): DiscountRule[] {
       user_agents: Array.isArray(item.user_agents) ? item.user_agents : [],
       match_mode: item.match_mode === 'all' ? 'all' : 'any',
       ua_match: item.ua_match === 'exact' ? 'exact' : 'contains',
+      schedule: parseDiscountSchedule(item.schedule),
     }))
   } catch {
     return []
   }
+}
+
+function normalizeDayList(value: unknown, min: number, max: number): number[] {
+  if (!Array.isArray(value)) return []
+  const days = value.filter(
+    (day): day is number =>
+      Number.isInteger(day) && day >= min && day <= max
+  )
+  return [...new Set(days)].sort((a, b) => a - b)
+}
+
+function parseDiscountSchedule(raw: unknown): DiscountSchedule | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const item = raw as Partial<DiscountSchedule>
+  const schedule: DiscountSchedule = {
+    timezone: typeof item.timezone === 'string' ? item.timezone.trim() : '',
+    weekdays: normalizeDayList(item.weekdays, 0, 6),
+    month_days: normalizeDayList(item.month_days, 1, 31),
+    start_time: typeof item.start_time === 'string' ? item.start_time : '',
+    end_time: typeof item.end_time === 'string' ? item.end_time : '',
+  }
+  return isDiscountScheduleEmpty(schedule) ? null : schedule
+}
+
+/** A schedule containing nothing but blank values restricts nothing. */
+export function isDiscountScheduleEmpty(
+  schedule: DiscountSchedule | null | undefined
+): boolean {
+  if (!schedule) return true
+  return (
+    !schedule.timezone?.trim() &&
+    schedule.weekdays.length === 0 &&
+    schedule.month_days.length === 0 &&
+    !schedule.start_time?.trim() &&
+    !schedule.end_time?.trim()
+  )
+}
+
+export function getSchedulePeriod(
+  schedule: DiscountSchedule | null
+): DiscountSchedulePeriod {
+  if (schedule && schedule.month_days.length > 0) return 'monthly'
+  if (schedule && schedule.weekdays.length > 0) return 'weekly'
+  return 'daily'
 }
 
 export async function getRecentUserAgents(): Promise<{

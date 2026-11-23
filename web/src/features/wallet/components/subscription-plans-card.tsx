@@ -262,6 +262,16 @@ export function SubscriptionPlansCard({
     return map;
   }, [plans]);
 
+  // Opens the purchase dialog for the subscription's plan; the backend turns it
+  // into a renewal of that subscription (no extra stock slot).
+  const startRenew = (planId?: number) => {
+    if (!planId) return;
+    const record = plans.find((item) => item?.plan?.id === planId);
+    if (!record) return;
+    setSelectedPlan(record);
+    setPurchaseOpen(true);
+  };
+
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
     const endTime = sub?.subscription?.end_time || 0;
     if (!endTime) return 0;
@@ -493,14 +503,23 @@ export function SubscriptionPlansCard({
                       key={subscription?.id}
                       className="bg-background rounded-md border p-3 text-xs"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">
                             {planTitle
                               ? `${planTitle} · ${t("Subscription")} #${subscription?.id}`
                               : `${t("Subscription")} #${subscription?.id}`}
                           </span>
                           {statusBadge}
+                          {isActive && planMap.has(subscription?.plan_id || 0) && (
+                            <Button
+                              size="sm"
+                              className="font-semibold shadow-sm"
+                              onClick={() => startRenew(subscription?.plan_id)}
+                            >
+                              {t("Renew Now")}
+                            </Button>
+                          )}
                         </div>
                         {isActive && (
                           <span className="text-muted-foreground">
@@ -580,6 +599,10 @@ export function SubscriptionPlansCard({
                                     Math.round((limitUsed / limitAmount) * 100),
                                   )
                                 : 0;
+                            const limitRemainingPercent = Math.max(
+                              0,
+                              100 - limitPercent,
+                            );
                             return (
                               <div key={quotaLimitKey(limit)}>
                                 <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
@@ -591,6 +614,12 @@ export function SubscriptionPlansCard({
                                     {limitAmount > 0
                                       ? formatQuota(limitAmount)
                                       : t("Unlimited")}
+                                    {limitAmount > 0 && (
+                                      <span className="ml-2">
+                                        {t("Remaining")}{" "}
+                                        {limitRemainingPercent}%
+                                      </span>
+                                    )}
                                   </span>
                                 </div>
                                 {limitResetTime > 0 && (
@@ -637,7 +666,11 @@ export function SubscriptionPlansCard({
               const isPopular = index === 0 && plans.length > 1;
               const limit = Number(plan.max_purchase_per_user || 0);
               const count = planPurchaseCountMap.get(plan.id) || 0;
-              const reached = limit > 0 && count >= limit;
+              // Holding an active subscription of this plan turns the purchase into
+              // a renewal: it prolongs the existing subscription and takes no stock
+              // slot, so neither sold-out stock nor the purchase limit blocks it.
+              const isRenewal = count > 0;
+              const reached = !isRenewal && limit > 0 && count >= limit;
               const stockTotal = Number(plan.stock_total || 0);
               const stockRemaining = Math.max(
                 stockTotal - Number(plan.stock_sold || 0),
@@ -722,7 +755,7 @@ export function SubscriptionPlansCard({
 
                     <Separator className="mb-3" />
 
-                    {soldOut ? (
+                    {soldOut && !isRenewal ? (
                       <Button variant="outline" className="w-full" disabled>
                         {t("Sold Out")}
                       </Button>
@@ -746,7 +779,7 @@ export function SubscriptionPlansCard({
                           setPurchaseOpen(true);
                         }}
                       >
-                        {t("Subscribe Now")}
+                        {isRenewal ? t("Renew") : t("Subscribe Now")}
                       </Button>
                     )}
                   </CardContent>
@@ -785,6 +818,11 @@ export function SubscriptionPlansCard({
         purchaseCount={
           selectedPlan?.plan?.id
             ? planPurchaseCountMap.get(selectedPlan.plan.id)
+            : undefined
+        }
+        renewal={
+          selectedPlan?.plan?.id
+            ? (planPurchaseCountMap.get(selectedPlan.plan.id) || 0) > 0
             : undefined
         }
       />

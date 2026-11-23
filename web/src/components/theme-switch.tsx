@@ -35,9 +35,9 @@ export function ThemeSwitch() {
   const { theme, setTheme } = useTheme()
 
   /* Update theme-color meta tag
-   * when theme is updated */
+   * when theme is updated. Matches the cyber glitch canvas. */
   useEffect(() => {
-    const themeColor = theme === 'dark' ? '#020817' : '#fff'
+    const themeColor = theme === 'dark' ? '#050508' : '#f4f4ef'
     const metaThemeColor = document.querySelector("meta[name='theme-color']")
     if (metaThemeColor) metaThemeColor.setAttribute('content', themeColor)
   }, [theme])

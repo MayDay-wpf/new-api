@@ -482,12 +482,20 @@ func RedeemCode(key string, userId int) (*RedeemResult, error) {
 		if err != nil {
 			return err
 		}
-		if err := checkSubscriptionPlanStockFor(tx, plan.Id, true, 1, redemption.Id); err != nil {
-			var msg *common.Message
-			if errors.As(err, &msg) {
-				subscriptionErr = msg
-			}
+		// A code redeemed for a plan the user already holds renews that
+		// subscription instead of opening a new one, so it takes no stock slot.
+		renewal, err := isUserSubscriptionRenewalTx(tx, userId, plan.Id)
+		if err != nil {
 			return err
+		}
+		if !renewal {
+			if err := checkSubscriptionPlanStockFor(tx, plan.Id, true, 1, redemption.Id); err != nil {
+				var msg *common.Message
+				if errors.As(err, &msg) {
+					subscriptionErr = msg
+				}
+				return err
+			}
 		}
 		subscription, err := CreateUserSubscriptionFromPlanTx(tx, userId, plan, "redemption")
 		if err != nil {

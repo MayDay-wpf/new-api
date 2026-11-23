@@ -63,6 +63,8 @@ interface Props {
   epayMethods?: PaymentMethod[]
   purchaseLimit?: number
   purchaseCount?: number
+  /** The user already holds this plan: the purchase renews it instead of adding a slot. */
+  renewal?: boolean
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
 }
@@ -105,6 +107,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const allowBalancePay = plan.allow_balance_pay !== false
   const insufficientBalance = userQuota < balanceCost
   const limitReached =
+    !props.renewal &&
     (props.purchaseLimit || 0) > 0 &&
     (props.purchaseCount || 0) >= (props.purchaseLimit || 0)
   const planQuotaLimits = plan.quota_limits || []
@@ -321,6 +324,16 @@ export function SubscriptionPurchaseDialog(props: Props) {
             <AlertDescription>
               {t('Purchase limit reached')} ({props.purchaseCount}/
               {props.purchaseLimit})
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {props.renewal && !limitReached && (
+          <Alert>
+            <AlertDescription>
+              {t(
+                'This purchase renews your active subscription, resets its quota usage and extends its validity.'
+              )}
             </AlertDescription>
           </Alert>
         )}
