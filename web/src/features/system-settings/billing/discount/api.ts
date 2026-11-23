@@ -26,6 +26,7 @@ export type DiscountRule = {
   enabled: boolean
   ratio: number
   user_ids: number[]
+  channel_ids: number[]
   user_agents: string[]
   match_mode: DiscountMatchMode
   ua_match: DiscountUAMatch
@@ -34,6 +35,12 @@ export type DiscountRule = {
 export type RecentUserAgent = {
   user_agent: string
   count: number
+}
+
+export type DiscountChannel = {
+  id: number
+  name: string
+  tag: string
 }
 
 export const DISCOUNT_RULES_OPTION_KEY = 'billing_discount_setting.rules'
@@ -49,6 +56,11 @@ export function parseDiscountRules(raw: string | undefined): DiscountRule[] {
       enabled: item.enabled ?? false,
       ratio: Number(item.ratio) || 1,
       user_ids: Array.isArray(item.user_ids) ? item.user_ids : [],
+      channel_ids: Array.isArray(item.channel_ids)
+        ? item.channel_ids.filter(
+            (id) => Number.isInteger(id) && Number(id) > 0
+          )
+        : [],
       user_agents: Array.isArray(item.user_agents) ? item.user_agents : [],
       match_mode: item.match_mode === 'all' ? 'all' : 'any',
       ua_match: item.ua_match === 'exact' ? 'exact' : 'contains',
@@ -64,5 +76,14 @@ export async function getRecentUserAgents(): Promise<{
   data?: RecentUserAgent[]
 }> {
   const res = await api.get('/api/option/billing_discount_user_agents')
+  return res.data
+}
+
+export async function getDiscountChannels(): Promise<{
+  success: boolean
+  message?: string
+  data?: DiscountChannel[]
+}> {
+  const res = await api.get('/api/option/billing_discount_channels')
   return res.data
 }

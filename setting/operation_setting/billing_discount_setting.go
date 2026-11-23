@@ -21,14 +21,15 @@ const (
 	MaxBillingDiscountRatio = 10.0
 )
 
-// BillingDiscountRule 是一条折扣规则：命中后最终计费乘以 Ratio，不区分渠道。
+// BillingDiscountRule 是一条折扣规则：命中后最终计费乘以 Ratio。
 // 条件只统计非空列表：any 模式任一条件命中即生效，all 模式要求全部命中；
-// 没有任何条件的规则永不命中。
+// 没有任何条件的规则永不命中。渠道条件按请求实际使用的渠道判断。
 type BillingDiscountRule struct {
 	Name       string   `json:"name"`
 	Enabled    bool     `json:"enabled"`
 	Ratio      float64  `json:"ratio"`
 	UserIds    []int    `json:"user_ids"`
+	ChannelIds []int    `json:"channel_ids"`
 	UserAgents []string `json:"user_agents"`
 	MatchMode  string   `json:"match_mode"`
 	UAMatch    string   `json:"ua_match"`
@@ -88,8 +89,9 @@ func (rule BillingDiscountRule) matchesUserAgent(userAgent string) bool {
 	return false
 }
 
-// Matches reports whether the rule applies to the given user and User-Agent.
-func (rule BillingDiscountRule) Matches(userId int, userAgent string) bool {
+// Matches reports whether the rule applies to the given user, channel and
+// User-Agent.
+func (rule BillingDiscountRule) Matches(userId int, channelId int, userAgent string) bool {
 	if !rule.Enabled {
 		return false
 	}
@@ -98,6 +100,12 @@ func (rule BillingDiscountRule) Matches(userId int, userAgent string) bool {
 	if len(rule.UserIds) > 0 {
 		conditions++
 		if slices.Contains(rule.UserIds, userId) {
+			hits++
+		}
+	}
+	if len(rule.ChannelIds) > 0 {
+		conditions++
+		if channelId > 0 && slices.Contains(rule.ChannelIds, channelId) {
 			hits++
 		}
 	}
@@ -118,7 +126,9 @@ func (rule BillingDiscountRule) Matches(userId int, userAgent string) bool {
 
 // ResolveBillingDiscount returns the lowest ratio among matching rules, or
 // (1, "", false) when nothing matches. Invalid stored ratios are ignored.
-func ResolveBillingDiscount(userId int, userAgent string) (float64, string, bool) {
+// channelId is 0 when the request has no channel yet (e.g. pre-consume before
+// channel selection); rules with channel conditions simply do not match then.
+func ResolveBillingDiscount(userId int, channelId int, userAgent string) (float64, string, bool) {
 	ratio := 1.0
 	name := ""
 	matched := false
@@ -126,7 +136,7 @@ func ResolveBillingDiscount(userId int, userAgent string) (float64, string, bool
 		if math.IsNaN(rule.Ratio) || rule.Ratio <= 0 || rule.Ratio > MaxBillingDiscountRatio {
 			continue
 		}
-		if !rule.Matches(userId, userAgent) {
+		if !rule.Matches(userId, channelId, userAgent) {
 			continue
 		}
 		if !matched || rule.Ratio < ratio {

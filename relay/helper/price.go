@@ -33,8 +33,12 @@ func modelPriceNotConfiguredError(c *gin.Context, modelName string, userId int) 
 	return errors.New(i18n.T(c, key, map[string]any{"Model": modelName}))
 }
 
-// HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present
-func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hosttypes.GroupRatioInfo {
+// HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present.
+// channelID is the channel that will serve the current attempt (0 before the
+// channel is selected). It is explicit because on retries relayInfo still
+// carries the previous attempt's channel meta while the new channel is already
+// known to the caller.
+func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, channelID int) hosttypes.GroupRatioInfo {
 	groupRatioInfo := hosttypes.GroupRatioInfo{
 		GroupRatio:        1.0, // default ratio
 		GroupSpecialRatio: -1,
@@ -59,13 +63,14 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 		groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
 	}
 
-	// Admin billing discounts apply to every channel, so they are folded into
-	// the group ratio that every pre-consume and settlement path multiplies.
+	// Admin billing discounts are folded into the group ratio that every
+	// pre-consume and settlement path multiplies, so a rule bound to a channel
+	// only affects the attempts served by that channel.
 	userAgent := ""
 	if ctx.Request != nil {
 		userAgent = ctx.Request.UserAgent()
 	}
-	if discount, name, ok := operation_setting.ResolveBillingDiscount(relayInfo.UserId, userAgent); ok {
+	if discount, name, ok := operation_setting.ResolveBillingDiscount(relayInfo.UserId, channelID, userAgent); ok {
 		groupRatioInfo.GroupRatio *= discount
 		if groupRatioInfo.HasSpecialRatio {
 			groupRatioInfo.GroupSpecialRatio *= discount
@@ -86,7 +91,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	billingModelName := info.GetBillingModelName()
 	modelPrice, usePrice := ratio_setting.GetModelPrice(billingModelName, false)
 
-	groupRatioInfo := HandleGroupRatio(c, info)
+	groupRatioInfo := HandleGroupRatio(c, info, info.GetChannelID())
 
 	// Check if this model uses tiered_expr billing
 	if billing_setting.GetBillingMode(billingModelName) == billing_setting.BillingModeTieredExpr {
@@ -226,7 +231,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (hosttypes.PriceData, error) {
-	groupRatioInfo := HandleGroupRatio(c, info)
+	groupRatioInfo := HandleGroupRatio(c, info, info.GetChannelID())
 
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
 	usePrice := success

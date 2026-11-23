@@ -311,6 +311,12 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 			return apiErr
 		}
 		billingPrepared = true
+		// The channel is locked before RelayInfo exists, so the pre-consume could
+		// not see it; re-evaluate channel-scoped billing discounts now.
+		info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info, s.lockedChannelID)
+		if apiErr = service.PrepareTieredBillingForSelectedGroup(c, info); apiErr != nil {
+			return apiErr
+		}
 		var payload []byte
 		payload, apiErr = buildResponsesWSCreatePayload(c, info, create.Request, create.Generate, create.StreamID)
 		if apiErr != nil {
@@ -339,11 +345,13 @@ func (s *responsesWSSession) runCall(c *gin.Context, state *responsesWSCallState
 					return apiErr
 				}
 				billingPrepared = true
-			} else {
-				info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
-				if apiErr = service.PrepareTieredBillingForSelectedGroup(c, info); apiErr != nil {
-					return apiErr
-				}
+			}
+			// RelayInfo is created after the channel is selected, so its
+			// pre-consume could not see the channel; re-evaluate channel-scoped
+			// billing discounts on every attempt, the first one included.
+			info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info, channel.Id)
+			if apiErr = service.PrepareTieredBillingForSelectedGroup(c, info); apiErr != nil {
+				return apiErr
 			}
 			info.RetryIndex = retry.GetRetry()
 			policy.BeginAttempt(channel, info.UsingGroup)

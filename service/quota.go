@@ -122,7 +122,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	if ok {
 		actualGroupRatio = userGroupRatio
 	}
-	if discount, _, matched := operation_setting.ResolveBillingDiscount(relayInfo.UserId, ctx.Request.UserAgent()); matched {
+	if discount, _, matched := operation_setting.ResolveBillingDiscount(relayInfo.UserId, relayInfo.GetChannelID(), ctx.Request.UserAgent()); matched {
 		actualGroupRatio *= discount
 	}
 

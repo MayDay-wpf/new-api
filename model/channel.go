@@ -435,6 +435,25 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	return channels, err
 }
 
+// BillingDiscountChannel is the minimal channel identity used by the billing
+// discount rule editor, which only needs to let administrators pick channels.
+type BillingDiscountChannel struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+	Tag  string `json:"tag"`
+}
+
+// GetBillingDiscountChannels lists every channel's identity without exposing
+// keys or other configuration.
+func GetBillingDiscountChannels() ([]BillingDiscountChannel, error) {
+	channels := make([]BillingDiscountChannel, 0)
+	err := DB.Model(&Channel{}).
+		Select("id", "name", "COALESCE(tag, '') AS tag").
+		Order("id ASC").
+		Scan(&channels).Error
+	return channels, err
+}
+
 func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...ChannelSortOptions) ([]*Channel, error) {
 	var channels []*Channel
 	order := resolveChannelSortOptions(idSort, sortOptions)

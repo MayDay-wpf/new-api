@@ -82,14 +82,15 @@ type Log struct {
 
 // don't use iota, avoid change log type value
 const (
-	LogTypeUnknown = 0
-	LogTypeTopup   = 1
-	LogTypeConsume = 2
-	LogTypeManage  = 3
-	LogTypeSystem  = 4
-	LogTypeError   = 5
-	LogTypeRefund  = 6
-	LogTypeLogin   = 7
+	LogTypeUnknown  = 0
+	LogTypeTopup    = 1
+	LogTypeConsume  = 2
+	LogTypeManage   = 3
+	LogTypeSystem   = 4
+	LogTypeError    = 5
+	LogTypeRefund   = 6
+	LogTypeLogin    = 7
+	LogTypeTransfer = 8
 )
 
 func ensureLogRequestId(log *Log) {
@@ -325,6 +326,33 @@ func RecordTopupLog(userId int, content *common.Message, callerIp string, paymen
 	err := createLog(log)
 	if err != nil {
 		common.SysLog(common.LogText("failed to record topup log: %s", err.Error()))
+	}
+}
+
+// RecordTransferLog stores one side of a wallet balance transfer. Quota is
+// negative for the sender and positive for the recipient so the usage-log cost
+// column shows the direction of the movement.
+func RecordTransferLog(userId int, quota int, content *common.Message, callerIp string) {
+	username, _ := GetUsernameById(userId, false)
+	other := NewLogOther()
+	other.MergeAdmin(map[string]any{
+		"caller_ip": callerIp,
+		"node_name": common.NodeName,
+		"version":   common.Version,
+	})
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      LogTypeTransfer,
+		Content:   other.setContent([]*common.Message{content}),
+		Quota:     quota,
+		Ip:        callerIp,
+		Other:     other.JSONString(),
+	}
+	err := createLog(log)
+	if err != nil {
+		common.SysLog(common.LogText("failed to record transfer log: %s", err.Error()))
 	}
 }
 

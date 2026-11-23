@@ -49,6 +49,7 @@ export type PaymentResponse = ApiResponse<Record<string, unknown>> & {
 export type StripePaymentResponse = ApiResponse<{ pay_link: string }>
 export type AffiliateCodeResponse = ApiResponse<string>
 export type AffiliateTransferResponse = ApiResponse
+export type BalanceTransferResponse = ApiResponse<BalanceTransferResult>
 export type CreemPaymentResponse = ApiResponse<{ checkout_url: string }>
 export type WaffoPaymentResponse = ApiResponse<
   { payment_url?: string } | string
@@ -225,6 +226,28 @@ export interface AmountRequest {
  */
 export interface AffiliateTransferRequest {
   /** Quota amount to transfer */
+  quota: number
+}
+
+/**
+ * Balance transfer request (user to user)
+ */
+export interface BalanceTransferRequest {
+  /** User ID of the recipient */
+  target_user_id: number
+  /** Quota amount to transfer */
+  quota: number
+}
+
+/**
+ * Balance transfer result
+ */
+export interface BalanceTransferResult {
+  /** User ID of the recipient */
+  target_user_id: number
+  /** Username of the recipient */
+  target_username: string
+  /** Transferred quota amount */
   quota: number
 }
 

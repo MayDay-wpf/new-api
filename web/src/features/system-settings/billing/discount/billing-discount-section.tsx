@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import { BadgePercent, Edit, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -45,6 +46,7 @@ import { SettingsSection } from '../../components/settings-section'
 import { useUpdateOption } from '../../hooks/use-update-option'
 import {
   DISCOUNT_RULES_OPTION_KEY,
+  getDiscountChannels,
   parseDiscountRules,
   type DiscountRule,
 } from './api'
@@ -69,6 +71,22 @@ export function BillingDiscountSection(props: Props) {
   useEffect(() => {
     setRules(savedRules)
   }, [savedRules])
+
+  // Only fetch channels when a rule targets some: rules without channel
+  // conditions do not need the list.
+  const hasChannelConditions = rules.some((rule) => rule.channel_ids.length > 0)
+  const channelsQuery = useQuery({
+    queryKey: ['billing-discount-channels'],
+    queryFn: getDiscountChannels,
+    enabled: hasChannelConditions,
+  })
+  const channelNames = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const channel of channelsQuery.data?.data ?? []) {
+      names.set(String(channel.id), channel.name)
+    }
+    return names
+  }, [channelsQuery.data])
 
   const isDirty = JSON.stringify(rules) !== JSON.stringify(savedRules)
 
@@ -111,7 +129,7 @@ export function BillingDiscountSection(props: Props) {
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <p className='text-muted-foreground text-sm'>
           {t(
-            'Matched requests are billed at final cost × ratio on every channel. When several rules match, the lowest ratio wins.'
+            'Matched requests are billed at final cost × ratio. When several rules match, the lowest ratio wins.'
           )}
         </p>
         <Button variant='outline' onClick={() => openEditor(null)}>
@@ -125,14 +143,14 @@ export function BillingDiscountSection(props: Props) {
           icon={BadgePercent}
           title={t('No discount rules yet')}
           description={t(
-            'Add a rule to discount selected users or request User-Agents.'
+            'Add a rule to discount selected users, channels or request User-Agents.'
           )}
           className='min-h-56'
         />
       ) : (
         <StaticDataTable
           className='overflow-x-auto'
-          tableClassName='min-w-[880px] table-fixed [&_th]:px-4 [&_td]:px-4 [&_td]:py-3'
+          tableClassName='min-w-[1040px] table-fixed [&_th]:px-4 [&_td]:px-4 [&_td]:py-3'
           data={indexedRules}
           getRowKey={(item) => `${item.index}:${item.rule.name}`}
           columns={[
@@ -151,7 +169,7 @@ export function BillingDiscountSection(props: Props) {
             {
               id: 'name',
               header: t('Name'),
-              className: 'w-[18%]',
+              className: 'w-[16%]',
               cell: (item) => (
                 <TruncatedCell tabIndex={0}>{item.rule.name}</TruncatedCell>
               ),
@@ -166,7 +184,7 @@ export function BillingDiscountSection(props: Props) {
             {
               id: 'users',
               header: t('Users'),
-              className: 'w-[18%]',
+              className: 'w-[14%]',
               cell: (item) => (
                 <TruncatedCell
                   tabIndex={0}
@@ -176,6 +194,25 @@ export function BillingDiscountSection(props: Props) {
                 >
                   {item.rule.user_ids.length > 0
                     ? t('{{count}} users', { count: item.rule.user_ids.length })
+                    : '—'}
+                </TruncatedCell>
+              ),
+            },
+            {
+              id: 'channels',
+              header: t('Channels'),
+              className: 'w-[14%]',
+              cell: (item) => (
+                <TruncatedCell
+                  tabIndex={0}
+                  tooltipContent={item.rule.channel_ids
+                    .map((id) => channelNames.get(String(id)) ?? `#${id}`)
+                    .join(', ')}
+                >
+                  {item.rule.channel_ids.length > 0
+                    ? t('{{count}} channels', {
+                        count: item.rule.channel_ids.length,
+                      })
                     : '—'}
                 </TruncatedCell>
               ),

@@ -26,6 +26,7 @@ import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
+import { BalanceTransferDialog } from './components/dialogs/balance-transfer-dialog'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
@@ -39,6 +40,7 @@ import {
   useTopupInfo,
   usePayment,
   useAffiliate,
+  useBalanceTransfer,
   useRedemption,
   useCreemPayment,
   useWaffoPayment,
@@ -75,6 +77,8 @@ export function Wallet(props: WalletProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [balanceTransferDialogOpen, setBalanceTransferDialogOpen] =
+    useState(false)
   const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
   const [subscriptionRefreshKey, setSubscriptionRefreshKey] = useState(0)
@@ -110,6 +114,8 @@ export function Wallet(props: WalletProps) {
     transferring,
   } = useAffiliate()
   const { redeeming, redeemCode } = useRedemption()
+  const { transferring: balanceTransferring, transferBalance } =
+    useBalanceTransfer()
   const { processing: creemProcessing, processCreemPayment } = useCreemPayment()
   const { processing: waffoProcessing, processWaffoPayment } = useWaffoPayment()
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
@@ -240,6 +246,15 @@ export function Wallet(props: WalletProps) {
     return success
   }
 
+  // Handle balance transfer to another user
+  const handleBalanceTransfer = async (targetUserId: number, quota: number) => {
+    const success = await transferBalance(targetUserId, quota)
+    if (success) {
+      await fetchUser()
+    }
+    return success
+  }
+
   // Handle Creem product selection
   const handleCreemProductSelect = (product: CreemProduct) => {
     setSelectedCreemProduct(product)
@@ -310,7 +325,9 @@ export function Wallet(props: WalletProps) {
             <Tabs
               value={activeTab}
               onValueChange={(value) =>
-                setActiveTab(value === 'subscription' ? 'subscription' : 'balance')
+                setActiveTab(
+                  value === 'subscription' ? 'subscription' : 'balance'
+                )
               }
             >
               <TabsList className='h-11 max-w-full flex-wrap justify-start gap-1 p-1 group-data-horizontal/tabs:h-11'>
@@ -338,7 +355,11 @@ export function Wallet(props: WalletProps) {
                   : 'hidden'
               }
             >
-              <WalletStatsCard user={user} loading={userLoading} />
+              <WalletStatsCard
+                user={user}
+                onTransfer={() => setBalanceTransferDialogOpen(true)}
+                loading={userLoading}
+              />
 
               <div id='wallet-add-funds' className='scroll-mt-4'>
                 <RechargeFormCard
@@ -429,6 +450,14 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleTransfer}
         availableQuota={user?.aff_quota ?? 0}
         transferring={transferring}
+      />
+
+      <BalanceTransferDialog
+        open={balanceTransferDialogOpen}
+        onOpenChange={setBalanceTransferDialogOpen}
+        onConfirm={handleBalanceTransfer}
+        availableQuota={user?.quota ?? 0}
+        transferring={balanceTransferring}
       />
 
       <BillingHistoryDialog

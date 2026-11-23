@@ -31,6 +31,8 @@ import type {
   StripePaymentResponse,
   AffiliateCodeResponse,
   AffiliateTransferResponse,
+  BalanceTransferRequest,
+  BalanceTransferResponse,
   BillingHistoryResponse,
   CompleteOrderRequest,
   CreemPaymentRequest,
@@ -196,6 +198,16 @@ export async function transferAffiliateQuota(
   request: AffiliateTransferRequest
 ): Promise<AffiliateTransferResponse> {
   const res = await api.post('/api/user/aff_transfer', request)
+  return res.data
+}
+
+/**
+ * Transfer balance to another user by user ID
+ */
+export async function transferBalance(
+  request: BalanceTransferRequest
+): Promise<BalanceTransferResponse> {
+  const res = await api.post('/api/user/transfer', request)
   return res.data
 }
 

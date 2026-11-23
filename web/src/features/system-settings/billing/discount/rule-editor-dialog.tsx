@@ -31,6 +31,7 @@ import { useDebounce } from '@/hooks/use-debounce'
 
 import { SettingsSwitchField } from '../../components/settings-form-layout'
 import {
+  getDiscountChannels,
   getRecentUserAgents,
   MAX_DISCOUNT_RATIO,
   type DiscountMatchMode,
@@ -45,6 +46,7 @@ const EMPTY_RULE: DiscountRule = {
   enabled: true,
   ratio: 0.5,
   user_ids: [],
+  channel_ids: [],
   user_agents: [],
   match_mode: 'any',
   ua_match: 'contains',
@@ -89,6 +91,12 @@ export function DiscountRuleEditorDialog(props: Props) {
     enabled: props.open,
   })
 
+  const channelsQuery = useQuery({
+    queryKey: ['billing-discount-channels'],
+    queryFn: getDiscountChannels,
+    enabled: props.open,
+  })
+
   // Remember every username we have seen so selected chips keep a readable
   // label after the search keyword changes.
   useEffect(() => {
@@ -128,6 +136,21 @@ export function DiscountRuleEditorDialog(props: Props) {
     [userAgentsQuery.data, t]
   )
 
+  const channelOptions = useMemo<Option[]>(() => {
+    const items = channelsQuery.data?.data ?? []
+    const options: Option[] = items.map((channel) => ({
+      value: String(channel.id),
+      label: `${channel.name} (#${channel.id})`,
+      hint: channel.tag || undefined,
+    }))
+    for (const id of draft.channel_ids) {
+      const value = String(id)
+      if (options.some((option) => option.value === value)) continue
+      options.push({ value, label: `#${value}` })
+    }
+    return options
+  }, [channelsQuery.data, draft.channel_ids])
+
   function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const name = draft.name.trim()
@@ -147,8 +170,12 @@ export function DiscountRuleEditorDialog(props: Props) {
     const userAgents = draft.user_agents
       .map((value) => value.trim())
       .filter(Boolean)
-    if (draft.user_ids.length === 0 && userAgents.length === 0) {
-      setError(t('Select at least one user or User-Agent'))
+    if (
+      draft.user_ids.length === 0 &&
+      draft.channel_ids.length === 0 &&
+      userAgents.length === 0
+    ) {
+      setError(t('Select at least one user, channel or User-Agent'))
       return
     }
     props.onSave({ ...draft, name, ratio, user_agents: userAgents })
@@ -256,6 +283,25 @@ export function DiscountRuleEditorDialog(props: Props) {
         </div>
 
         <div className='grid gap-1.5'>
+          <Label htmlFor='discount-rule-channels'>{t('Channels')}</Label>
+          <MultiSelect
+            id='discount-rule-channels'
+            options={channelOptions}
+            selected={draft.channel_ids.map(String)}
+            onChange={(values) =>
+              setDraft({
+                ...draft,
+                channel_ids: values
+                  .map(Number)
+                  .filter((id) => Number.isInteger(id) && id > 0),
+              })
+            }
+            placeholder={t('Select channels')}
+            maxVisibleChips={8}
+          />
+        </div>
+
+        <div className='grid gap-1.5'>
           <Label htmlFor='discount-rule-user-agents'>{t('User-Agent')}</Label>
           <MultiSelect
             id='discount-rule-user-agents'
@@ -308,10 +354,10 @@ export function DiscountRuleEditorDialog(props: Props) {
               }
             >
               <NativeSelectOption value='any'>
-                {t('User OR User-Agent matches')}
+                {t('Any condition matches')}
               </NativeSelectOption>
               <NativeSelectOption value='all'>
-                {t('User AND User-Agent both match')}
+                {t('All conditions match')}
               </NativeSelectOption>
             </NativeSelect>
           </div>

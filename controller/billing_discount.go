@@ -17,3 +17,14 @@ func GetBillingDiscountUserAgents(c *gin.Context) {
 	}
 	common.ApiSuccess(c, userAgents)
 }
+
+// GetBillingDiscountChannels lists channels so administrators can restrict a
+// billing discount rule to a set of channels.
+func GetBillingDiscountChannels(c *gin.Context) {
+	channels, err := model.GetBillingDiscountChannels()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, channels)
+}
