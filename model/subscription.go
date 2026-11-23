@@ -1141,10 +1141,47 @@ func IsUserSubscriptionRenewal(userId int, planId int) (bool, error) {
 	return isUserSubscriptionRenewalTx(DB, userId, planId)
 }
 
+// getConflictingActiveSubscriptionTx returns the user's active, unexpired
+// subscription of another plan. A user holds at most one active subscription
+// at a time, so a second plan must wait until that one ends.
+func getConflictingActiveSubscriptionTx(db *gorm.DB, userId int, planId int, now int64) (*UserSubscription, error) {
+	if db == nil {
+		db = DB
+	}
+	var sub UserSubscription
+	err := db.
+		Where("user_id = ? AND plan_id <> ? AND status = ? AND end_time > ?", userId, planId, "active", now).
+		Order("end_time desc, id desc").
+		First(&sub).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &sub, nil
+}
+
+// ensureNoConflictingActiveSubscription blocks buying another plan while the
+// user already has an active subscription. Renewing the running plan stays
+// allowed; changing plans is an administrator action (cancel the current
+// subscription, then grant the new one).
+func ensureNoConflictingActiveSubscription(db *gorm.DB, userId int, planId int, now int64) error {
+	conflict, err := getConflictingActiveSubscriptionTx(db, userId, planId, now)
+	if err != nil {
+		return err
+	}
+	if conflict == nil {
+		return nil
+	}
+	return common.NewMessage("You already have an active subscription. Only renewal or switching via the administrator is allowed.")
+}
+
 // CheckSubscriptionPurchaseAllowed validates plan stock and the per-user
 // purchase limit before a payment order is created. A renewal skips both
 // checks: it extends the existing subscription and therefore takes no new stock
-// slot.
+// slot. Buying a different plan while any subscription is still running is
+// rejected: the user may only renew it or ask an administrator to switch.
 func CheckSubscriptionPurchaseAllowed(userId int, plan *SubscriptionPlan) error {
 	if plan == nil || plan.Id <= 0 {
 		return errors.New("invalid plan")
@@ -1155,6 +1192,9 @@ func CheckSubscriptionPurchaseAllowed(userId int, plan *SubscriptionPlan) error 
 	}
 	if renewal {
 		return nil
+	}
+	if err := ensureNoConflictingActiveSubscription(DB, userId, plan.Id, GetDBTimestamp()); err != nil {
+		return err
 	}
 	if err := CheckSubscriptionPlanStock(plan.Id); err != nil {
 		return err
@@ -1618,12 +1658,17 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 			return common.NewMessage("Insufficient balance")
 		}
 		// Lock the plan row and count issued subscriptions before charging; fails
-		// when sold out. A renewal keeps the user's existing stock slot.
+		// when sold out. A renewal keeps the user's existing stock slot. While the
+		// user still holds another running plan, buying this one is rejected: only
+		// renewal or an administrator switch is allowed.
 		renewal, err := isUserSubscriptionRenewalTx(tx, userId, plan.Id)
 		if err != nil {
 			return err
 		}
 		if !renewal {
+			if err := ensureNoConflictingActiveSubscription(tx, userId, plan.Id, GetDBTimestamp()); err != nil {
+				return err
+			}
 			if err := checkSubscriptionPlanStock(tx, plan.Id, true); err != nil {
 				return err
 			}

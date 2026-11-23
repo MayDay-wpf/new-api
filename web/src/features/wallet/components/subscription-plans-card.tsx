@@ -218,6 +218,26 @@ export function SubscriptionPlansCard({
     billingPreference === "subscription_first" ||
     billingPreference === "subscription_only";
 
+  // A user may hold only one active subscription at a time. While it runs, only
+  // that plan can be renewed; every other plan stays locked until it ends or an
+  // administrator switches the subscription.
+  const activePlanIdSet = useMemo(() => {
+    const ids = new Set<number>();
+    const now = Date.now() / 1000;
+    for (const sub of activeSubscriptions) {
+      const subscription = sub?.subscription;
+      if (!subscription?.plan_id) continue;
+      if (
+        subscription.status !== "active" ||
+        (subscription.end_time || 0) <= now
+      ) {
+        continue;
+      }
+      ids.add(subscription.plan_id);
+    }
+    return ids;
+  }, [activeSubscriptions]);
+
   const planPurchaseCountMap = useMemo(() => {
     const map = new Map<number, number>();
     const now = Date.now() / 1000;
@@ -670,6 +690,11 @@ export function SubscriptionPlansCard({
               // a renewal: it prolongs the existing subscription and takes no stock
               // slot, so neither sold-out stock nor the purchase limit blocks it.
               const isRenewal = count > 0;
+              // Only the running plan may be renewed. Any other plan is locked
+              // while a subscription is active; switching requires an
+              // administrator.
+              const blockedByActiveSubscription =
+                !isRenewal && activePlanIdSet.size > 0;
               const reached = !isRenewal && limit > 0 && count >= limit;
               const stockTotal = Number(plan.stock_total || 0);
               const stockRemaining = Math.max(
@@ -755,7 +780,20 @@ export function SubscriptionPlansCard({
 
                     <Separator className="mb-3" />
 
-                    {soldOut && !isRenewal ? (
+                    {blockedByActiveSubscription ? (
+                      <Tooltip>
+                        <TooltipTrigger render={<div />}>
+                          <Button variant="outline" className="w-full" disabled>
+                            {t("Switch via Admin")}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {t(
+                            "You already have an active subscription. Only renewal or switching via the administrator is allowed.",
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : soldOut && !isRenewal ? (
                       <Button variant="outline" className="w-full" disabled>
                         {t("Sold Out")}
                       </Button>
