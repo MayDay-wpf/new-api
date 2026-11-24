@@ -1838,6 +1838,188 @@ func buildSubscriptionSummaries(subs []UserSubscription) []SubscriptionSummary {
 	return result
 }
 
+// ---- Admin: cross-user subscription overview ----
+
+// AdminUserSubscriptionRow is one user subscription enriched with the user and
+// plan display fields the admin overview needs.
+type AdminUserSubscriptionRow struct {
+	Subscription *UserSubscription `json:"subscription"`
+	Username     string            `json:"username"`
+	DisplayName  string            `json:"display_name"`
+	Email        string            `json:"email"`
+	PlanTitle    string            `json:"plan_title"`
+	PlanSubtitle string            `json:"plan_subtitle"`
+	// PlanQuotaLimits holds the plan's periodic quota windows (e.g. 5h). They
+	// apply even when the subscription has no lifetime total quota.
+	PlanQuotaLimits SubscriptionPlanQuotaLimits `json:"plan_quota_limits"`
+}
+
+// AdminUserSubscriptionSummary is the overview shown above the admin list. It
+// counts every subscription matching the keyword and plan filters, ignoring the
+// status filter so switching status does not change the overview.
+type AdminUserSubscriptionSummary struct {
+	Total        int64 `json:"total"`
+	Active       int64 `json:"active"`
+	ExpiringSoon int64 `json:"expiring_soon"`
+}
+
+// AdminUserSubscriptionQuery filters the cross-user subscription overview.
+type AdminUserSubscriptionQuery struct {
+	Keyword string
+	PlanId  int
+	Status  string
+}
+
+// adminSubscriptionExpiringWindow is the "expiring soon" horizon (7 days).
+const adminSubscriptionExpiringWindow = int64(7 * 24 * 60 * 60)
+
+// GetAdminUserSubscriptions lists user subscriptions across all users for the
+// admin overview. The keyword matches the user's username/display name/email,
+// the plan title, or the subscription/user id. Active and expired are derived
+// from end_time as well as status so the list stays correct before the expiry
+// job has run.
+func GetAdminUserSubscriptions(query AdminUserSubscriptionQuery, pageInfo *common.PageInfo) ([]AdminUserSubscriptionRow, int64, AdminUserSubscriptionSummary, error) {
+	now := common.GetTimestamp()
+	summary := AdminUserSubscriptionSummary{}
+
+	var pattern string
+	keyword := strings.TrimSpace(query.Keyword)
+	if keyword != "" {
+		sanitized, err := sanitizeLikePattern(keyword)
+		if err != nil {
+			return nil, 0, summary, err
+		}
+		pattern = sanitized
+		if !strings.Contains(pattern, "%") {
+			pattern = "%" + pattern + "%"
+		}
+	}
+
+	applyFilters := func(gormDB *gorm.DB) *gorm.DB {
+		db := gormDB.Model(&UserSubscription{})
+		if pattern != "" {
+			userQuery := gormDB.Model(&User{}).Select("id").
+				Where("username LIKE ? ESCAPE '!' OR display_name LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!'", pattern, pattern, pattern)
+			planQuery := gormDB.Model(&SubscriptionPlan{}).Select("id").
+				Where("title LIKE ? ESCAPE '!'", pattern)
+			conditions := []string{"user_id IN (?)", "plan_id IN (?)"}
+			args := []any{userQuery, planQuery}
+			if id, convErr := strconv.Atoi(keyword); convErr == nil && id > 0 {
+				conditions = append(conditions, "id = ?", "user_id = ?")
+				args = append(args, id, id)
+			}
+			db = db.Where("("+strings.Join(conditions, " OR ")+")", args...)
+		}
+		if query.PlanId > 0 {
+			db = db.Where("plan_id = ?", query.PlanId)
+		}
+		return db
+	}
+
+	if err := applyFilters(DB).Count(&summary.Total).Error; err != nil {
+		return nil, 0, summary, err
+	}
+	if err := applyFilters(DB).Where("status = ? AND end_time > ?", "active", now).
+		Count(&summary.Active).Error; err != nil {
+		return nil, 0, summary, err
+	}
+	if err := applyFilters(DB).Where("status = ? AND end_time > ? AND end_time <= ?",
+		"active", now, now+adminSubscriptionExpiringWindow).
+		Count(&summary.ExpiringSoon).Error; err != nil {
+		return nil, 0, summary, err
+	}
+
+	applyStatus := func(db *gorm.DB) *gorm.DB {
+		switch query.Status {
+		case "active":
+			return db.Where("status = ? AND end_time > ?", "active", now)
+		case "expired":
+			return db.Where("status = ? OR (status = ? AND end_time <= ?)", "expired", "active", now)
+		case "cancelled":
+			return db.Where("status = ?", "cancelled")
+		}
+		return db
+	}
+
+	var total int64
+	if err := applyStatus(applyFilters(DB)).Count(&total).Error; err != nil {
+		return nil, 0, summary, err
+	}
+	if total == 0 {
+		return []AdminUserSubscriptionRow{}, 0, summary, nil
+	}
+
+	var subs []UserSubscription
+	if err := applyStatus(applyFilters(DB)).
+		Order("end_time desc, id desc").
+		Limit(pageInfo.GetPageSize()).
+		Offset(pageInfo.GetStartIdx()).
+		Find(&subs).Error; err != nil {
+		return nil, 0, summary, err
+	}
+	if len(subs) == 0 {
+		return []AdminUserSubscriptionRow{}, total, summary, nil
+	}
+
+	// buildSubscriptionSummaries refreshes the per-window quota usages so the
+	// amounts shown in the overview match what billing currently enforces.
+	subSummaries := buildSubscriptionSummaries(subs)
+
+	userIds := make([]int, 0, len(subs))
+	planIds := make([]int, 0, len(subs))
+	seenUsers := make(map[int]struct{}, len(subs))
+	seenPlans := make(map[int]struct{}, len(subs))
+	for _, sub := range subs {
+		if _, ok := seenUsers[sub.UserId]; !ok {
+			seenUsers[sub.UserId] = struct{}{}
+			userIds = append(userIds, sub.UserId)
+		}
+		if _, ok := seenPlans[sub.PlanId]; !ok {
+			seenPlans[sub.PlanId] = struct{}{}
+			planIds = append(planIds, sub.PlanId)
+		}
+	}
+
+	users := make([]User, 0, len(userIds))
+	if len(userIds) > 0 {
+		if err := DB.Where("id IN ?", userIds).Find(&users).Error; err != nil {
+			return nil, 0, summary, err
+		}
+	}
+	userMap := make(map[int]User, len(users))
+	for _, user := range users {
+		userMap[user.Id] = user
+	}
+
+	plans := make(map[int]*SubscriptionPlan, len(planIds))
+	for _, planId := range planIds {
+		if plan, err := GetSubscriptionPlanById(planId); err == nil && plan != nil {
+			plans[planId] = plan
+		}
+	}
+
+	rows := make([]AdminUserSubscriptionRow, 0, len(subSummaries))
+	for _, item := range subSummaries {
+		if item.Subscription == nil {
+			continue
+		}
+		sub := item.Subscription
+		row := AdminUserSubscriptionRow{Subscription: sub}
+		if user, ok := userMap[sub.UserId]; ok {
+			row.Username = user.Username
+			row.DisplayName = user.DisplayName
+			row.Email = user.Email
+		}
+		if plan := plans[sub.PlanId]; plan != nil {
+			row.PlanTitle = plan.Title
+			row.PlanSubtitle = plan.Subtitle
+			row.PlanQuotaLimits = plan.QuotaLimits
+		}
+		rows = append(rows, row)
+	}
+	return rows, total, summary, nil
+}
+
 // AdminInvalidateUserSubscription marks a user subscription as cancelled and ends it immediately.
 func AdminInvalidateUserSubscription(userSubscriptionId int) (*common.Message, error) {
 	if userSubscriptionId <= 0 {

@@ -503,6 +503,31 @@ func AdminListUserSubscriptions(c *gin.Context) {
 	common.ApiSuccess(c, subs)
 }
 
+// AdminListAllUserSubscriptions lists subscriptions across all users with the
+// owning user and plan display fields, for the admin subscription overview.
+func AdminListAllUserSubscriptions(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	query := model.AdminUserSubscriptionQuery{
+		Keyword: c.Query("keyword"),
+		Status:  c.Query("status"),
+	}
+	if planId, err := strconv.Atoi(c.Query("plan_id")); err == nil && planId > 0 {
+		query.PlanId = planId
+	}
+	rows, total, summary, err := model.GetAdminUserSubscriptions(query, pageInfo)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items":     rows,
+		"total":     total,
+		"page":      pageInfo.Page,
+		"page_size": pageInfo.PageSize,
+		"summary":   summary,
+	})
+}
+
 type AdminCreateUserSubscriptionRequest struct {
 	PlanId int `json:"plan_id"`
 }

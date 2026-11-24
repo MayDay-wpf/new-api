@@ -163,7 +163,7 @@ export function SidebarModulesSection({
         description: t('Advanced platform configuration.'),
       },
       subscription: {
-        title: t('Subscription Management'),
+        title: t('Subscription Plans'),
         description: t('Manage subscription plans and pricing.'),
       },
     },

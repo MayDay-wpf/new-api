@@ -145,9 +145,18 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Box,
           },
           {
-            title: t('Users'),
-            url: '/users',
+            title: t('User Management'),
             icon: Users,
+            items: [
+              {
+                title: t('Users'),
+                url: '/users',
+              },
+              {
+                title: t('Subscription Management'),
+                url: '/users/subscriptions',
+              },
+            ],
           },
           {
             title: t('Redemption Codes'),
@@ -160,7 +169,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: TicketPercent,
           },
           {
-            title: t('Subscriptions'),
+            title: t('Subscription Plans'),
             url: '/subscriptions',
             icon: CreditCard,
           },
