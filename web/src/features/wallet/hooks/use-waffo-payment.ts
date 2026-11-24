@@ -55,13 +55,18 @@ export function useWaffoPayment() {
   const [processing, setProcessing] = useState(false)
 
   const processWaffoPayment = useCallback(
-    async (topupAmount: number, payMethodIndex?: number) => {
+    async (
+      topupAmount: number,
+      payMethodIndex?: number,
+      couponIds?: number[]
+    ) => {
       setProcessing(true)
 
       try {
         const response = await requestWaffoPayment({
           amount: Math.floor(topupAmount),
           pay_method_index: payMethodIndex,
+          ...(couponIds?.length ? { coupon_ids: couponIds } : {}),
         })
 
         if (isApiSuccess(response)) {

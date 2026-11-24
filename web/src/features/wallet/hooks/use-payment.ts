@@ -109,7 +109,7 @@ export function usePayment() {
 
   // Process payment
   const processPayment = useCallback(
-    async (topupAmount: number, paymentType: string) => {
+    async (topupAmount: number, paymentType: string, couponIds?: number[]) => {
       try {
         setProcessing(true)
 
@@ -124,6 +124,7 @@ export function usePayment() {
           : await requestPayment({
               amount,
               payment_method: paymentType,
+              ...(couponIds?.length ? { coupon_ids: couponIds } : {}),
             })
 
         if (!isApiSuccess(response)) {

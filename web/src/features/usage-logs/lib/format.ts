@@ -546,6 +546,9 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'redemption.update': 'Updated a redemption code',
   'redemption.delete': 'Deleted a redemption code',
   'redemption.delete_invalid': 'Deleted invalid redemption codes',
+  // Coupons
+  'coupon.issue': 'Issued coupon {{name}} to {{count}} users',
+  'coupon.revoke': 'Revoked coupon {{name}} ({{count}} unused)',
   // Prefill groups
   'prefill_group.create': 'Created a prefill group',
   'prefill_group.update': 'Updated a prefill group',

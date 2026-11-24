@@ -84,6 +84,7 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/user/topup/info":                     accessTokenScopeRule("wallet:read"),
 	"GET /api/user/topup/self":                     accessTokenScopeRule("wallet:read"),
 	"POST /api/user/topup":                         accessTokenScopeRule("wallet:write"),
+	"GET /api/user/coupons":                        accessTokenScopeRule("wallet:read"),
 	"POST /api/user/pay":                           accessTokenScopeRule("wallet:write"),
 	"POST /api/user/amount":                        accessTokenScopeRule("wallet:read"),
 	"POST /api/user/stripe/pay":                    accessTokenScopeRule("wallet:write"),
@@ -239,6 +240,12 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"PUT /api/redemption/":           accessTokenScopeRule("redemption:write"),
 	"DELETE /api/redemption/invalid": accessTokenScopeRule("redemption:write"),
 	"DELETE /api/redemption/:id":     accessTokenScopeRule("redemption:write"),
+
+	// router/api-router.go: /api/coupon
+	"GET /api/coupon/":            accessTokenScopeRule("coupon:read"),
+	"POST /api/coupon/":           accessTokenScopeRule("coupon:write"),
+	"POST /api/coupon/:id/revoke": accessTokenScopeRule("coupon:write"),
+	"GET /api/coupon/:id/users":   accessTokenScopeRule("coupon:read"),
 
 	// router/api-router.go: /api/audit, /api/log, /api/data
 	"GET /api/audit/self":                       accessTokenScopeRule("usage:read"),

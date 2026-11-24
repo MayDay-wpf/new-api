@@ -109,6 +109,7 @@ type WaffoPayRequest struct {
 	PayMethodIndex *int   `json:"pay_method_index"` // 服务端支付方式列表的索引，nil 表示由 Waffo 自动选择
 	PayMethodType  string `json:"pay_method_type"`  // Deprecated: 兼容旧前端，优先使用 pay_method_index
 	PayMethodName  string `json:"pay_method_name"`  // Deprecated: 兼容旧前端，优先使用 pay_method_index
+	CouponIds      []int  `json:"coupon_ids"`
 }
 
 func RequestWaffoAmount(c *gin.Context) {
@@ -214,6 +215,11 @@ func RequestWaffoPay(c *gin.Context) {
 	merchantOrderId := fmt.Sprintf("WAFFO-%d-%d-%s", id, time.Now().UnixMilli(), randstr.String(6))
 	paymentRequestId := merchantOrderId
 
+	payMoney, ok := lockTopUpCoupons(c, id, req.CouponIds, payMoney, merchantOrderId)
+	if !ok {
+		return
+	}
+
 	// Token 模式下归一化 Amount（存等价美元/CNY 数量，避免 RechargeWaffo 双重放大）
 	amount := req.Amount
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
@@ -233,6 +239,7 @@ func RequestWaffoPay(c *gin.Context) {
 	}
 	if err := topUp.Insert(); err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Waffo failed to create top-up order user_id=%d trade_no=%s amount=%d error=%q", id, merchantOrderId, req.Amount, err.Error()))
+		releaseCouponsOrLog(c, merchantOrderId)
 		paymentError(c, common.NewMessage("Failed to create order"))
 		return
 	}
@@ -242,6 +249,7 @@ func RequestWaffoPay(c *gin.Context) {
 		logger.LogError(c.Request.Context(), common.LogText("Waffo SDK initialization failed user_id=%d trade_no=%s error=%q", id, merchantOrderId, err.Error()))
 		topUp.Status = common.TopUpStatusFailed
 		_ = topUp.Update()
+		releaseCouponsOrLog(c, merchantOrderId)
 		paymentError(c, common.NewMessage("Payment configuration error"))
 		return
 	}
@@ -288,6 +296,7 @@ func RequestWaffoPay(c *gin.Context) {
 		logger.LogError(c.Request.Context(), common.LogText("Waffo failed to create order user_id=%d trade_no=%s error=%q", id, merchantOrderId, err.Error()))
 		topUp.Status = common.TopUpStatusFailed
 		_ = topUp.Update()
+		releaseCouponsOrLog(c, merchantOrderId)
 		paymentError(c, common.NewMessage("Failed to start payment"))
 		return
 	}
@@ -295,6 +304,7 @@ func RequestWaffoPay(c *gin.Context) {
 		logger.LogWarn(c.Request.Context(), common.LogText("Waffo order creation rejected user_id=%d trade_no=%s code=%s message=%q response=%q", id, merchantOrderId, resp.Code, resp.Message, common.GetJsonString(resp)))
 		topUp.Status = common.TopUpStatusFailed
 		_ = topUp.Update()
+		releaseCouponsOrLog(c, merchantOrderId)
 		paymentError(c, common.NewMessage("Failed to start payment"))
 		return
 	}

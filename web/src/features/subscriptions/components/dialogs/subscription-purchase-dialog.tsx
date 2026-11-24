@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQueryClient } from '@tanstack/react-query'
 import { Crown, CalendarClock, Package } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -27,6 +28,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Combobox } from '@/components/ui/combobox'
 import { Separator } from '@/components/ui/separator'
+import { userCouponsQueryKey } from '@/features/coupons/query-keys'
+import type { UserCoupon } from '@/features/coupons/types'
+import { CouponSelector } from '@/features/wallet/components/coupon-selector'
+import {
+  calculateCouponDiscount,
+  getBalanceQuotaCost,
+  isOnlinePayableAmount,
+} from '@/features/wallet/lib/coupon'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { formatQuota } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
@@ -74,6 +83,8 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const { currency } = useSystemConfig()
   const [paying, setPaying] = useState(false)
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('')
+  const [selectedCoupons, setSelectedCoupons] = useState<UserCoupon[]>([])
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (props.open && props.epayMethods && props.epayMethods.length > 0) {
@@ -82,6 +93,12 @@ export function SubscriptionPurchaseDialog(props: Props) {
       setSelectedEpayMethod('')
     }
   }, [props.open, props.epayMethods])
+
+  const planId = props.plan?.plan?.id
+  // Coupons are chosen per checkout: start empty whenever it opens or the plan changes.
+  useEffect(() => {
+    setSelectedCoupons([])
+  }, [props.open, planId])
 
   const plan = props.plan?.plan
   if (!plan) return null
@@ -94,15 +111,20 @@ export function SubscriptionPurchaseDialog(props: Props) {
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
   const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
   const totalAmount = Number(plan.total_amount || 0)
-  const price = Number(plan.price_amount || 0).toFixed(2)
+  const priceAmount = Number(plan.price_amount || 0)
+  const couponSummary = calculateCouponDiscount(priceAmount, selectedCoupons)
+  const hasCoupons = selectedCoupons.length > 0
+  const finalAmount = hasCoupons ? couponSummary.finalAmount : priceAmount
+  const couponIds = hasCoupons
+    ? selectedCoupons.map((coupon) => coupon.id)
+    : undefined
+  const onlineAmountTooLow = hasCoupons && !isOnlinePayableAmount(finalAmount)
+  const price = priceAmount.toFixed(2)
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
       : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
-  const balanceCost = Math.max(
-    0,
-    Math.ceil(Number(plan.price_amount || 0) * quotaPerUnit)
-  )
+  const balanceCost = getBalanceQuotaCost(finalAmount, quotaPerUnit)
   const userQuota = Math.max(0, Number(props.userQuota || 0))
   const allowBalancePay = plan.allow_balance_pay !== false
   const insufficientBalance = userQuota < balanceCost
@@ -151,13 +173,24 @@ export function SubscriptionPurchaseDialog(props: Props) {
     }
   }
 
+  // Coupons used by a new order are now reserved or consumed.
+  const refreshCoupons = () => {
+    if (hasCoupons) {
+      void queryClient.invalidateQueries({ queryKey: userCouponsQueryKey })
+    }
+  }
+
   // In-tab redirect (not window.open) — user-gesture context is lost
   // across the await, so a popup would be blocked. Same as the wallet hook.
   const handlePayWaffoPancake = async () => {
     setPaying(true)
     try {
-      const res = await paySubscriptionWaffoPancake({ plan_id: plan.id })
+      const res = await paySubscriptionWaffoPancake({
+        plan_id: plan.id,
+        coupon_ids: couponIds,
+      })
       if (res.message === 'success' && res.data?.checkout_url) {
+        refreshCoupons()
         toast.success(t('Redirecting to payment page...'))
         window.location.href = res.data.checkout_url
       } else {
@@ -184,8 +217,10 @@ export function SubscriptionPurchaseDialog(props: Props) {
       const res = await paySubscriptionEpay({
         plan_id: plan.id,
         payment_method: selectedEpayMethod,
+        coupon_ids: couponIds,
       })
       if (res.message === 'success' && res.url) {
+        refreshCoupons()
         const form = document.createElement('form')
         form.action = res.url
         form.method = 'POST'
@@ -221,8 +256,12 @@ export function SubscriptionPurchaseDialog(props: Props) {
     }
     setPaying(true)
     try {
-      const res = await paySubscriptionBalance({ plan_id: plan.id })
+      const res = await paySubscriptionBalance({
+        plan_id: plan.id,
+        coupon_ids: couponIds,
+      })
       if (res.success) {
+        refreshCoupons()
         toast.success(t('Subscription purchased successfully'))
         void props.onPurchaseSuccess?.()
         props.onOpenChange(false)
@@ -313,11 +352,40 @@ export function SubscriptionPurchaseDialog(props: Props) {
             </div>
           )}
           <Separator />
+          {hasCoupons && (
+            <>
+              <div className='flex items-center justify-between'>
+                <span className='text-muted-foreground text-sm'>
+                  {t('Original price')}
+                </span>
+                <span className='text-sm tabular-nums'>${price}</span>
+              </div>
+              <div className='flex items-center justify-between'>
+                <span className='text-muted-foreground text-sm'>
+                  {t('Coupon discount')}
+                </span>
+                <span className='text-sm tabular-nums'>
+                  -${couponSummary.appliedDiscount.toFixed(2)}
+                </span>
+              </div>
+            </>
+          )}
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
-            <span className='text-primary text-lg font-bold'>${price}</span>
+            <span className='text-primary text-lg font-bold'>
+              ${finalAmount.toFixed(2)}
+            </span>
           </div>
         </div>
+
+        <CouponSelector
+          purchase='subscription'
+          orderAmount={priceAmount}
+          selected={selectedCoupons}
+          onChange={setSelectedCoupons}
+          enabled={props.open}
+          disabled={paying || limitReached}
+        />
 
         {limitReached && (
           <Alert variant='destructive'>
@@ -376,6 +444,11 @@ export function SubscriptionPurchaseDialog(props: Props) {
             <p className='text-muted-foreground text-xs'>
               {t('Select payment method')}
             </p>
+            {onlineAmountTooLow && (
+              <p className='text-destructive text-xs'>
+                {t('Payment amount after coupons is too low')}
+              </p>
+            )}
             {(hasStripe || hasCreem || hasWaffoPancake) && (
               <div className='grid grid-cols-2 gap-2 sm:flex'>
                 {hasStripe && (
@@ -383,7 +456,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
                     variant='outline'
                     className='flex-1'
                     onClick={handlePayStripe}
-                    disabled={paying || limitReached}
+                    disabled={paying || limitReached || hasCoupons}
                   >
                     Stripe
                   </Button>
@@ -393,7 +466,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
                     variant='outline'
                     className='flex-1'
                     onClick={handlePayCreem}
-                    disabled={paying || limitReached}
+                    disabled={paying || limitReached || hasCoupons}
                   >
                     Creem
                   </Button>
@@ -403,12 +476,17 @@ export function SubscriptionPurchaseDialog(props: Props) {
                     variant='outline'
                     className='flex-1'
                     onClick={handlePayWaffoPancake}
-                    disabled={paying || limitReached}
+                    disabled={paying || limitReached || onlineAmountTooLow}
                   >
                     Waffo Pancake
                   </Button>
                 )}
               </div>
+            )}
+            {hasCoupons && (hasStripe || hasCreem) && (
+              <p className='text-muted-foreground text-xs'>
+                {t('Coupons cannot be used with Stripe or Creem')}
+              </p>
             )}
             {hasEpay && (
               <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
@@ -424,7 +502,12 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 />
                 <Button
                   onClick={handlePayEpay}
-                  disabled={paying || !selectedEpayMethod || limitReached}
+                  disabled={
+                    paying ||
+                    !selectedEpayMethod ||
+                    limitReached ||
+                    onlineAmountTooLow
+                  }
                 >
                   {t('Pay')}
                 </Button>

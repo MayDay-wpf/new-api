@@ -193,6 +193,8 @@ export interface PaymentRequest {
   amount: number
   /** Payment method identifier */
   payment_method: string
+  /** Selected user coupon IDs (epay only; Stripe ignores coupons) */
+  coupon_ids?: number[]
 }
 
 /**
@@ -203,6 +205,8 @@ export interface WaffoPaymentRequest {
   amount: number
   /** Optional server-side Waffo payment method index */
   pay_method_index?: number
+  /** Selected user coupon IDs */
+  coupon_ids?: number[]
 }
 
 /**
@@ -211,6 +215,8 @@ export interface WaffoPaymentRequest {
 export interface WaffoPancakePaymentRequest {
   /** Topup amount */
   amount: number
+  /** Selected user coupon IDs */
+  coupon_ids?: number[]
 }
 
 /**

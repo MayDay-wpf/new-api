@@ -33,6 +33,7 @@ import {
   Settings,
   ShieldCheck,
   Ticket,
+  TicketPercent,
   User,
   Users,
   Wallet,
@@ -152,6 +153,11 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
+          },
+          {
+            title: t('Coupons'),
+            url: '/coupons',
+            icon: TicketPercent,
           },
           {
             title: t('Subscriptions'),

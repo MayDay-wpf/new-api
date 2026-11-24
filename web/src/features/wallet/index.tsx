@@ -16,11 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { userCouponsQueryKey } from '@/features/coupons/query-keys'
+import type { UserCoupon } from '@/features/coupons/types'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
@@ -31,6 +34,7 @@ import { BillingHistoryDialog } from './components/dialogs/billing-history-dialo
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
+import { MyCouponsCard } from './components/my-coupons-card'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { ResetCardRedeemCard } from './components/reset-card-redeem-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
@@ -63,6 +67,13 @@ interface WalletProps {
   initialShowHistory?: boolean
 }
 
+type WalletTab = 'balance' | 'subscription' | 'coupons'
+
+function toWalletTab(value: unknown): WalletTab {
+  if (value === 'subscription' || value === 'coupons') return value
+  return 'balance'
+}
+
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
   const [user, setUser] = useState<UserWalletData | null>(null)
@@ -86,9 +97,9 @@ export function Wallet(props: WalletProps) {
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
-  const [activeTab, setActiveTab] = useState<'balance' | 'subscription'>(
-    'balance'
-  )
+  const [activeTab, setActiveTab] = useState<WalletTab>('balance')
+  const [selectedCoupons, setSelectedCoupons] = useState<UserCoupon[]>([])
+  const queryClient = useQueryClient()
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
@@ -171,6 +182,7 @@ export function Wallet(props: WalletProps) {
   const handleSelectPreset = (preset: PresetAmount) => {
     setTopupAmount(preset.value)
     setSelectedPreset(preset.value)
+    setSelectedCoupons([])
     calculatePaymentAmount(preset.value, getCurrentPaymentType())
   }
 
@@ -178,6 +190,7 @@ export function Wallet(props: WalletProps) {
   const handleTopupAmountChange = (amount: number) => {
     setTopupAmount(amount)
     setSelectedPreset(null)
+    setSelectedCoupons([])
     calculatePaymentAmount(amount, getCurrentPaymentType())
   }
 
@@ -185,6 +198,7 @@ export function Wallet(props: WalletProps) {
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     setSelectedPaymentMethod(method)
     setSelectedWaffoMethodIndex(null)
+    setSelectedCoupons([])
     setPaymentLoading(method.type)
 
     try {
@@ -214,13 +228,22 @@ export function Wallet(props: WalletProps) {
         regular: processPayment,
         waffo: processWaffoPayment,
         waffoPancake: processWaffoPancakePayment,
-      }
+      },
+      selectedCoupons.map((coupon) => coupon.id)
     )
 
     if (success) {
       setConfirmDialogOpen(false)
+      setSelectedCoupons([])
+      // Coupons used by the new order are now reserved or consumed.
+      void queryClient.invalidateQueries({ queryKey: userCouponsQueryKey })
       await fetchUser()
     }
+  }
+
+  const handleConfirmDialogOpenChange = (open: boolean) => {
+    setConfirmDialogOpen(open)
+    if (!open) setSelectedCoupons([])
   }
 
   // Handle redemption
@@ -284,6 +307,7 @@ export function Wallet(props: WalletProps) {
       icon: method.icon,
     })
     setSelectedWaffoMethodIndex(index)
+    setSelectedCoupons([])
     setPaymentLoading(loadingKey)
 
     try {
@@ -324,11 +348,7 @@ export function Wallet(props: WalletProps) {
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
             <Tabs
               value={activeTab}
-              onValueChange={(value) =>
-                setActiveTab(
-                  value === 'subscription' ? 'subscription' : 'balance'
-                )
-              }
+              onValueChange={(value) => setActiveTab(toWalletTab(value))}
             >
               <TabsList className='h-11 max-w-full flex-wrap justify-start gap-1 p-1 group-data-horizontal/tabs:h-11'>
                 <TabsTrigger
@@ -345,6 +365,12 @@ export function Wallet(props: WalletProps) {
                     {t('Subscription Purchase')}
                   </TabsTrigger>
                 )}
+                <TabsTrigger
+                  value='coupons'
+                  className='h-full px-5 text-[15px] font-medium'
+                >
+                  {t('My Coupons')}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -427,13 +453,15 @@ export function Wallet(props: WalletProps) {
                 refreshKey={subscriptionRefreshKey}
               />
             </div>
+
+            {activeTab === 'coupons' && <MyCouponsCard />}
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
       <PaymentConfirmDialog
         open={confirmDialogOpen}
-        onOpenChange={setConfirmDialogOpen}
+        onOpenChange={handleConfirmDialogOpenChange}
         onConfirm={handlePaymentConfirm}
         topupAmount={topupAmount}
         paymentAmount={paymentAmount}
@@ -442,6 +470,8 @@ export function Wallet(props: WalletProps) {
         processing={processing || waffoProcessing || pancakeProcessing}
         discountRate={getDiscountRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
+        selectedCoupons={selectedCoupons}
+        onSelectedCouponsChange={setSelectedCoupons}
       />
 
       <TransferDialog

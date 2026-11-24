@@ -30,11 +30,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { UserCoupon } from '@/features/coupons/types'
 import { formatLocalCurrencyAmount } from '@/lib/currency'
 
 import { DEFAULT_DISCOUNT_RATE } from '../../constants'
-import { formatCurrency, getPaymentIcon } from '../../lib'
+import {
+  calculateCouponDiscount,
+  formatCurrency,
+  getPaymentIcon,
+  isOnlinePayableAmount,
+  supportsTopupCoupons,
+} from '../../lib'
 import type { PaymentMethod } from '../../types'
+import { CouponSelector } from '../coupon-selector'
 
 interface PaymentConfirmDialogProps {
   open: boolean
@@ -47,6 +55,8 @@ interface PaymentConfirmDialogProps {
   processing: boolean
   discountRate?: number
   usdExchangeRate?: number
+  selectedCoupons: UserCoupon[]
+  onSelectedCouponsChange: (coupons: UserCoupon[]) => void
 }
 
 export function PaymentConfirmDialog({
@@ -60,11 +70,19 @@ export function PaymentConfirmDialog({
   processing,
   discountRate = DEFAULT_DISCOUNT_RATE,
   usdExchangeRate = 1,
+  selectedCoupons,
+  onSelectedCouponsChange,
 }: PaymentConfirmDialogProps) {
   const { t } = useTranslation()
   const hasDiscount = discountRate > 0 && discountRate < 1 && paymentAmount > 0
   const originalAmount = hasDiscount ? paymentAmount / discountRate : 0
   const discountAmount = hasDiscount ? originalAmount - paymentAmount : 0
+  const couponsEnabled = supportsTopupCoupons(paymentMethod?.type)
+  const appliedCoupons = couponsEnabled ? selectedCoupons : []
+  const couponSummary = calculateCouponDiscount(paymentAmount, appliedCoupons)
+  const hasCoupons = appliedCoupons.length > 0
+  const finalAmount = hasCoupons ? couponSummary.finalAmount : paymentAmount
+  const amountTooLow = hasCoupons && !isOnlinePayableAmount(finalAmount)
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -101,9 +119,14 @@ export function PaymentConfirmDialog({
             ) : (
               <div className='flex items-baseline gap-2'>
                 <span className='text-2xl font-semibold'>
-                  {formatCurrency(paymentAmount)}
+                  {formatCurrency(finalAmount)}
                 </span>
-                {hasDiscount && (
+                {hasCoupons && (
+                  <span className='text-muted-foreground text-sm line-through'>
+                    {formatCurrency(paymentAmount)}
+                  </span>
+                )}
+                {!hasCoupons && hasDiscount && (
                   <span className='text-muted-foreground text-sm line-through'>
                     {formatCurrency(originalAmount)}
                   </span>
@@ -121,6 +144,34 @@ export function PaymentConfirmDialog({
                 </span>
               </div>
             </div>
+          )}
+
+          {couponsEnabled && (
+            <CouponSelector
+              purchase='topup'
+              orderAmount={paymentAmount}
+              selected={selectedCoupons}
+              onChange={onSelectedCouponsChange}
+              enabled={open && !calculating}
+              disabled={processing}
+            />
+          )}
+
+          {hasCoupons && !calculating && (
+            <div className='flex items-center justify-between text-sm'>
+              <span className='text-muted-foreground'>
+                {t('Coupon discount')}
+              </span>
+              <span className='font-medium tabular-nums'>
+                -{formatCurrency(couponSummary.appliedDiscount)}
+              </span>
+            </div>
+          )}
+
+          {amountTooLow && (
+            <p className='text-destructive text-sm'>
+              {t('Payment amount after coupons is too low')}
+            </p>
           )}
 
           <div className='border-t pt-4'>
@@ -145,7 +196,10 @@ export function PaymentConfirmDialog({
           <AlertDialogCancel disabled={processing}>
             {t('Cancel')}
           </AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} disabled={processing}>
+          <AlertDialogAction
+            onClick={onConfirm}
+            disabled={processing || calculating || amountTooLow}
+          >
             {processing && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
             {t('Confirm Payment')}
           </AlertDialogAction>

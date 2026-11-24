@@ -128,6 +128,7 @@ func GetTopUpInfo(c *gin.Context) {
 type EpayRequest struct {
 	Amount        int64  `json:"amount"`
 	PaymentMethod string `json:"payment_method"`
+	CouponIds     []int  `json:"coupon_ids"`
 }
 
 type AmountRequest struct {
@@ -330,6 +331,10 @@ func RequestEpay(c *gin.Context) {
 		paymentError(c, common.NewMessage("Payment information has not been configured by administrator"))
 		return
 	}
+	payMoney, ok := lockTopUpCoupons(c, id, req.CouponIds, payMoney, tradeNo)
+	if !ok {
+		return
+	}
 	uri, params, err := client.Purchase(&epay.PurchaseArgs{
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
@@ -341,6 +346,7 @@ func RequestEpay(c *gin.Context) {
 	})
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Epay failed to start payment user_id=%d trade_no=%s payment_method=%s amount=%d error=%q", id, tradeNo, req.PaymentMethod, req.Amount, err.Error()))
+		releaseCouponsOrLog(c, tradeNo)
 		paymentError(c, common.NewMessage("Failed to start payment"))
 		return
 	}
@@ -363,6 +369,7 @@ func RequestEpay(c *gin.Context) {
 	err = topUp.Insert()
 	if err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Epay failed to create top-up order user_id=%d trade_no=%s payment_method=%s amount=%d error=%q", id, tradeNo, req.PaymentMethod, req.Amount, err.Error()))
+		releaseCouponsOrLog(c, tradeNo)
 		paymentError(c, common.NewMessage("Failed to create order"))
 		return
 	}
@@ -604,4 +611,31 @@ func AdminCompleteTopUp(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, nil)
+}
+
+// lockTopUpCoupons applies the selected coupons to a pending top-up order and
+// returns the amount the gateway must charge. On failure it has already
+// written the error response; the caller only returns.
+func lockTopUpCoupons(c *gin.Context, userId int, couponIds []int, payMoney float64, tradeNo string) (float64, bool) {
+	if len(couponIds) == 0 {
+		return payMoney, true
+	}
+	result, err := model.LockUserCoupons(userId, couponIds, model.CouponScopeTopUp, payMoney, tradeNo)
+	if err != nil {
+		paymentError(c, err)
+		return 0, false
+	}
+	if result.FinalAmount < 0.01 {
+		releaseCouponsOrLog(c, tradeNo)
+		paymentError(c, model.ErrCouponPaymentAmountZero)
+		return 0, false
+	}
+	return result.FinalAmount, true
+}
+
+// releaseCouponsOrLog gives back the coupons of an order that was never paid.
+func releaseCouponsOrLog(c *gin.Context, tradeNo string) {
+	if err := model.ReleaseUserCoupons(tradeNo); err != nil {
+		logger.LogError(c.Request.Context(), common.LogText("failed to release coupons trade_no=%s error=%q", tradeNo, err.Error()))
+	}
 }

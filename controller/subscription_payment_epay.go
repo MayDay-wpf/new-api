@@ -19,6 +19,7 @@ import (
 type SubscriptionEpayPayRequest struct {
 	PlanId        int    `json:"plan_id"`
 	PaymentMethod string `json:"payment_method"`
+	CouponIds     []int  `json:"coupon_ids"`
 }
 
 func SubscriptionRequestEpay(c *gin.Context) {
@@ -77,10 +78,14 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		return
 	}
 
+	payMoney, ok := lockSubscriptionCoupons(c, userId, req.CouponIds, plan.PriceAmount, tradeNo)
+	if !ok {
+		return
+	}
 	order := &model.SubscriptionOrder{
 		UserId:          userId,
 		PlanId:          plan.Id,
-		Money:           plan.PriceAmount,
+		Money:           payMoney,
 		TradeNo:         tradeNo,
 		PaymentMethod:   req.PaymentMethod,
 		PaymentProvider: model.PaymentProviderEpay,
@@ -88,6 +93,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		Status:          common.TopUpStatusPending,
 	}
 	if err := order.Insert(); err != nil {
+		releaseCouponsOrLog(c, tradeNo)
 		common.ApiErrorT(c, "Failed to create order")
 		return
 	}
@@ -95,7 +101,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
 		Name:           fmt.Sprintf("SUB:%s", plan.Title),
-		Money:          strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),
+		Money:          strconv.FormatFloat(payMoney, 'f', 2, 64),
 		Device:         epay.PC,
 		NotifyUrl:      notifyUrl,
 		ReturnUrl:      returnUrl,

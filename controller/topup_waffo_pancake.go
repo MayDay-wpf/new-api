@@ -19,7 +19,8 @@ import (
 )
 
 type WaffoPancakePayRequest struct {
-	Amount int64 `json:"amount"`
+	Amount    int64 `json:"amount"`
+	CouponIds []int `json:"coupon_ids"`
 }
 
 func RequestWaffoPancakeAmount(c *gin.Context) {
@@ -378,6 +379,10 @@ func RequestWaffoPancakePay(c *gin.Context) {
 	}
 
 	tradeNo := fmt.Sprintf("WAFFO_PANCAKE-%d-%d-%s", id, time.Now().UnixMilli(), randstr.String(6))
+	payMoney, ok := lockTopUpCoupons(c, id, req.CouponIds, payMoney, tradeNo)
+	if !ok {
+		return
+	}
 	topUp := &model.TopUp{
 		UserId:          id,
 		Amount:          normalizeWaffoPancakeTopUpAmount(req.Amount),
@@ -390,6 +395,7 @@ func RequestWaffoPancakePay(c *gin.Context) {
 	}
 	if err := topUp.Insert(); err != nil {
 		logger.LogError(c.Request.Context(), common.LogText("Waffo Pancake failed to create top-up order user_id=%d trade_no=%s amount=%d error=%q", id, tradeNo, req.Amount, err.Error()))
+		releaseCouponsOrLog(c, tradeNo)
 		paymentError(c, common.NewMessage("Failed to create order"))
 		return
 	}
@@ -410,6 +416,7 @@ func RequestWaffoPancakePay(c *gin.Context) {
 		logger.LogError(c.Request.Context(), common.LogText("Waffo Pancake failed to create checkout session user_id=%d trade_no=%s error=%q", id, tradeNo, err.Error()))
 		topUp.Status = common.TopUpStatusFailed
 		_ = topUp.Update()
+		releaseCouponsOrLog(c, tradeNo)
 		paymentError(c, common.NewMessage("Failed to start payment"))
 		return
 	}

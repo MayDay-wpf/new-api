@@ -112,29 +112,54 @@ export function isWaffoPancakePayment(paymentType: string): boolean {
 }
 
 export interface PaymentProcessors {
-  regular: (topupAmount: number, paymentType: string) => Promise<boolean>
-  waffo: (topupAmount: number, payMethodIndex: number) => Promise<boolean>
-  waffoPancake: (topupAmount: number) => Promise<boolean>
+  regular: (
+    topupAmount: number,
+    paymentType: string,
+    couponIds?: number[]
+  ) => Promise<boolean>
+  waffo: (
+    topupAmount: number,
+    payMethodIndex: number,
+    couponIds?: number[]
+  ) => Promise<boolean>
+  waffoPancake: (topupAmount: number, couponIds?: number[]) => Promise<boolean>
+}
+
+/**
+ * Whether a top-up payment method accepts coupons. Stripe and Creem
+ * checkouts are priced by the provider and cannot be discounted.
+ */
+export function supportsTopupCoupons(paymentType: string | undefined): boolean {
+  if (!paymentType) return false
+  return (
+    paymentType !== PAYMENT_TYPES.STRIPE && paymentType !== PAYMENT_TYPES.CREEM
+  )
 }
 
 export async function dispatchSelectedPayment(
   paymentMethod: PaymentMethod,
   topupAmount: number,
   waffoMethodIndex: number | null,
-  processors: PaymentProcessors
+  processors: PaymentProcessors,
+  couponIds: number[] = []
 ): Promise<boolean> {
+  const coupons =
+    supportsTopupCoupons(paymentMethod.type) && couponIds.length > 0
+      ? couponIds
+      : undefined
+
   if (isWaffoPayment(paymentMethod.type)) {
     if (waffoMethodIndex === null) {
       return false
     }
-    return processors.waffo(topupAmount, waffoMethodIndex)
+    return processors.waffo(topupAmount, waffoMethodIndex, coupons)
   }
 
   if (isWaffoPancakePayment(paymentMethod.type)) {
-    return processors.waffoPancake(topupAmount)
+    return processors.waffoPancake(topupAmount, coupons)
   }
 
-  return processors.regular(topupAmount, paymentMethod.type)
+  return processors.regular(topupAmount, paymentMethod.type, coupons)
 }
 
 /**

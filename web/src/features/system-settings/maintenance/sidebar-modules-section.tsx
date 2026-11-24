@@ -150,6 +150,10 @@ export function SidebarModulesSection({
         title: t('Redeem codes'),
         description: t('Create and review invite or credit codes.'),
       },
+      coupon: {
+        title: t('Coupons'),
+        description: t('Issue and revoke coupons.'),
+      },
       user: {
         title: t('Users'),
         description: t('Administer user accounts and roles.'),

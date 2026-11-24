@@ -17,6 +17,8 @@ const (
 	subscriptionResetTickInterval = 1 * time.Minute
 	subscriptionResetBatchSize    = 300
 	subscriptionCleanupInterval   = 30 * time.Minute
+	// Payment sessions expire well within this window (Waffo Pancake: 45 min).
+	couponLockTimeoutSeconds = 6 * 3600
 )
 
 var (
@@ -84,6 +86,10 @@ func runSubscriptionQuotaResetOnce() {
 	if time.Since(lastCleanup) >= subscriptionCleanupInterval {
 		if _, err := model.CleanupSubscriptionPreConsumeRecords(7 * 24 * 3600); err == nil {
 			subscriptionCleanupLast.Store(time.Now().Unix())
+		}
+		// Abandoned checkouts send no callback; give their coupons back.
+		if _, err := model.ReleaseStaleCouponLocks(couponLockTimeoutSeconds); err != nil {
+			logger.LogWarn(ctx, common.LogText("coupon lock release task failed: %v", err))
 		}
 	}
 	if common.DebugEnabled && (totalReset > 0 || totalExpired > 0) {

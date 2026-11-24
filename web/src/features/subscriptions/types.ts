@@ -113,6 +113,8 @@ export interface PlanPayload {
 export interface SubscriptionPayRequest {
   plan_id: number
   payment_method?: string
+  /** Selected user coupon IDs (balance, epay and Waffo Pancake only) */
+  coupon_ids?: number[]
 }
 
 export interface SubscriptionPayResponse {

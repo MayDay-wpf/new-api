@@ -24,7 +24,8 @@ type BillingPreferenceRequest struct {
 }
 
 type SubscriptionBalancePayRequest struct {
-	PlanId int `json:"plan_id"`
+	PlanId    int   `json:"plan_id"`
+	CouponIds []int `json:"coupon_ids"`
 }
 
 // ---- User APIs ----
@@ -162,7 +163,7 @@ func SubscriptionRequestBalancePay(c *gin.Context) {
 		return
 	}
 
-	if err := model.PurchaseSubscriptionWithBalance(userId, req.PlanId); err != nil {
+	if err := model.PurchaseSubscriptionWithBalance(userId, req.PlanId, req.CouponIds); err != nil {
 		common.ApiError(c, err)
 		return
 	}
@@ -667,4 +668,24 @@ func AdminDeleteUserSubscription(c *gin.Context) {
 		return
 	}
 	subscriptionChangeSuccess(c, msg)
+}
+
+// lockSubscriptionCoupons applies the selected coupons to a pending online
+// subscription order and returns the amount to charge. On failure the error
+// response has been written.
+func lockSubscriptionCoupons(c *gin.Context, userId int, couponIds []int, price float64, tradeNo string) (float64, bool) {
+	if len(couponIds) == 0 {
+		return price, true
+	}
+	result, err := model.LockUserCoupons(userId, couponIds, model.CouponScopeSubscription, price, tradeNo)
+	if err != nil {
+		common.ApiError(c, err)
+		return 0, false
+	}
+	if result.FinalAmount < 0.01 {
+		releaseCouponsOrLog(c, tradeNo)
+		common.ApiError(c, model.ErrCouponPaymentAmountZero)
+		return 0, false
+	}
+	return result.FinalAmount, true
 }

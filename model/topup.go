@@ -166,7 +166,10 @@ func UpdatePendingTopUpStatus(tradeNo string, expectedPaymentProvider string, ta
 		}
 
 		topUp.Status = targetStatus
-		return tx.Save(topUp).Error
+		if err := tx.Save(topUp).Error; err != nil {
+			return err
+		}
+		return releaseUserCouponsTx(tx, topUp.TradeNo)
 	})
 }
 
@@ -213,6 +216,9 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 		topUp.CompleteTime = common.GetTimestamp()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
+			return err
+		}
+		if err := consumeUserCouponsTx(tx, topUp.TradeNo); err != nil {
 			return err
 		}
 		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
@@ -502,6 +508,10 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 			return err
 		}
 
+		if err := consumeUserCouponsTx(tx, topUp.TradeNo); err != nil {
+			return err
+		}
+
 		// 增加用户额度（立即写库，保持一致性）
 		if err := creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil); err != nil {
 			return err
@@ -637,6 +647,9 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
+		if err := consumeUserCouponsTx(tx, topUp.TradeNo); err != nil {
+			return err
+		}
 
 		return creditTopUpQuota(tx, topUp.UserId, quotaToAdd, nil)
 	})
@@ -695,6 +708,9 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 		topUp.CompleteTime = common.GetTimestamp()
 		topUp.Status = common.TopUpStatusSuccess
 		if err := tx.Save(topUp).Error; err != nil {
+			return err
+		}
+		if err := consumeUserCouponsTx(tx, topUp.TradeNo); err != nil {
 			return err
 		}
 

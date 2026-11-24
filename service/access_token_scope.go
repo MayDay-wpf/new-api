@@ -96,6 +96,10 @@ var accessTokenStaticResources = []AccessTokenResource{
 		accessTokenView("View redemption codes."),
 		accessTokenEdit("Create, edit, and delete redemption codes."),
 	}},
+	{Resource: "coupon", LabelKey: "Coupons", group: AccessTokenGroupAdmin, minRole: common.RoleAdminUser, Actions: []authz.ActionDefinition{
+		accessTokenView("View coupons and their recipients."),
+		accessTokenEdit("Issue and revoke coupons."),
+	}},
 	{Resource: "group", LabelKey: "Groups", group: AccessTokenGroupAdmin, minRole: common.RoleAdminUser, Actions: []authz.ActionDefinition{
 		accessTokenView("View groups and prefill groups."),
 		accessTokenEdit("Create, edit, and delete prefill groups."),

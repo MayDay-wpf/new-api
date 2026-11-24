@@ -131,6 +131,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
 				selfRoute.POST("/waffo-pancake/amount", controller.RequestWaffoPancakeAmount)
 				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
+				selfRoute.GET("/coupons", controller.GetSelfCoupons)
 				selfRoute.POST("/aff_transfer", middleware.UserCriticalRateLimit("aff-transfer"), controller.TransferAffQuota)
 				selfRoute.POST("/transfer", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("balance-transfer"), controller.TransferQuotaToUser)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
@@ -332,6 +333,14 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.PUT("/", controller.UpdateRedemption)
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
+		}
+		couponRoute := apiRouter.Group("/coupon")
+		couponRoute.Use(middleware.AdminAuth())
+		{
+			couponRoute.GET("/", controller.AdminListCoupons)
+			couponRoute.POST("/", middleware.CriticalRateLimit(), controller.AdminIssueCoupon)
+			couponRoute.POST("/:id/revoke", controller.AdminRevokeCoupon)
+			couponRoute.GET("/:id/users", controller.AdminListCouponRecipients)
 		}
 		handlePermissionRoute(apiRouter.Group("", middleware.DisableCache(), middleware.AdminAuth()), http.MethodGet, "/audit", authz.AuditRead, controller.GetAuditLogs)
 		apiRouter.GET("/audit/self", middleware.DisableCache(), middleware.UserAuth(), controller.GetAuditLogs)
