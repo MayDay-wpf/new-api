@@ -46,9 +46,13 @@ export type SecurityProofScope =
   | 'admin.user.passkey.reset'
   | 'admin.user.2fa.disable'
   | 'admin.user.binding.clear'
+  | 'admin.user.batch'
 
 /** ManageUser actions that change a user's status or role and need step-up. */
 export type AdminUserManageAction = 'disable' | 'enable' | 'promote' | 'demote'
+
+/** Bulk user actions authorized by one `admin.user.batch` proof. */
+export type AdminUserBatchAction = 'delete' | 'disable'
 
 export type VerificationOperation =
   | { scope: 'channel.key.read'; context: { channel_id: number } }
@@ -69,6 +73,10 @@ export type VerificationOperation =
   | {
       scope: 'admin.user.manage'
       context: { user_id: number; action: AdminUserManageAction }
+    }
+  | {
+      scope: 'admin.user.batch'
+      context: { action: AdminUserBatchAction; user_ids: number[] }
     }
   | {
       scope: 'admin.user.binding.clear'

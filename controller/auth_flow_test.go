@@ -1142,6 +1142,18 @@ func TestOAuthRegistrationPersistsInviter(t *testing.T) {
 	})
 	inviter := model.User{Username: "inviter", AffCode: "valid-aff", Status: common.UserStatusEnabled}
 	require.NoError(t, db.Create(&inviter).Error)
+	banned := model.User{Username: "banned-inviter", AffCode: "banned-aff", Status: common.UserStatusDisabled}
+	require.NoError(t, db.Create(&banned).Error)
+	t.Run("banned inviter", func(t *testing.T) {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		identity := &oauth.OAuthUser{ProviderUserID: "inviter-test-banned", Username: "oauth-banned"}
+		created, _, err := findOrCreateOAuthUser(ctx, &oauth.GitHubProvider{}, identity, &oauth.OAuthToken{}, "banned-aff")
+		require.ErrorIs(t, err, model.ErrAffiliateCodeUnavailable)
+		assert.Nil(t, created)
+		var count int64
+		require.NoError(t, db.Model(&model.User{}).Where("github_id = ?", identity.ProviderUserID).Count(&count).Error)
+		assert.Zero(t, count, "a banned inviter's code must not create the user")
+	})
 	for _, tc := range []struct {
 		name, code string
 		want       int

@@ -540,13 +540,29 @@ func GetSelfUserById(id int) (*User, error) {
 	return &profile.User, err
 }
 
-func GetUserIdByAffCode(affCode string) (int, error) {
+// ErrAffiliateCodeUnavailable reports an invitation code whose owner has been
+// disabled, so it can no longer be used to register.
+var ErrAffiliateCodeUnavailable = errors.New("affiliate code is unavailable")
+
+// ResolveInviterIdByAffCode returns the inviter for a new registration. An
+// empty or unknown code means no inviter; a disabled inviter's code returns
+// ErrAffiliateCodeUnavailable.
+func ResolveInviterIdByAffCode(affCode string) (int, error) {
+	affCode = strings.TrimSpace(affCode)
 	if affCode == "" {
-		return 0, errors.New("affiliate code is empty")
+		return 0, nil
 	}
 	var user User
-	err := DB.Select("id").First(&user, "aff_code = ?", affCode).Error
-	return user.Id, err
+	if err := DB.Select("id", "status").Where("aff_code = ?", affCode).Limit(1).Find(&user).Error; err != nil {
+		return 0, err
+	}
+	if user.Id == 0 {
+		return 0, nil
+	}
+	if user.Status != common.UserStatusEnabled {
+		return 0, ErrAffiliateCodeUnavailable
+	}
+	return user.Id, nil
 }
 
 // DeleteUserById soft-deletes a user and returns how many scoped access tokens

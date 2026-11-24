@@ -272,7 +272,16 @@ func Register(c *gin.Context) {
 		return
 	}
 	affCode := user.AffCode // this code is the inviter's code, not the user's own code
-	inviterId, _ := model.GetUserIdByAffCode(affCode)
+	inviterId, err := model.ResolveInviterIdByAffCode(affCode)
+	if err != nil {
+		if errors.Is(err, model.ErrAffiliateCodeUnavailable) {
+			writeAffiliateCodeUnavailable(c)
+			return
+		}
+		common.ApiErrorT(c, "Database error, please contact the administrator")
+		common.SysLog(common.LogText("ResolveInviterIdByAffCode error: %v", err))
+		return
+	}
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
@@ -298,6 +307,7 @@ func Register(c *gin.Context) {
 		common.ApiErrorT(c, "User registration failed or user ID retrieval failed")
 		return
 	}
+	recordInviteAudit(c, inviterId, &insertedUser)
 	// 生成默认令牌
 	if constant.GenerateDefaultToken {
 		key, err := common.GenerateKey()
@@ -429,17 +439,75 @@ func TransferAffQuota(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// 邀请返利转余额会直接变动账户余额，是高危资金操作：无论成功失败都写一条
+	// 审计日志，记录请求额度、转账前后额度与失败原因，便于追查盗刷。
+	params := map[string]any{
+		"quota":               logger.FormatQuota(tran.Quota),
+		"aff_quota_before":    logger.FormatQuota(user.AffQuota),
+		"wallet_quota_before": logger.FormatQuota(user.Quota),
+	}
+	success := false
+	defer func() {
+		params["success"] = success
+		recordUserSecurityAudit(c, id, "user.aff_transfer", params)
+	}()
+
 	err = user.TransferAffQuotaToQuota(tran.Quota)
 	var message *common.Message
 	if errors.As(err, &message) {
+		if float64(tran.Quota) < common.QuotaPerUnit {
+			params["failure_reason"] = "below_minimum"
+		} else {
+			params["failure_reason"] = "insufficient_aff_quota"
+		}
 		common.ApiError(c, err)
 		return
 	}
 	if err != nil {
+		params["failure_reason"] = "transfer_failed"
 		common.ApiErrorT(c, "Transfer failed {{error}}", map[string]any{"error": err.Error()})
 		return
 	}
+	params["aff_quota_after"] = logger.FormatQuota(user.AffQuota)
+	params["wallet_quota_after"] = logger.FormatQuota(user.Quota)
+	success = true
 	common.ApiSuccessT(c, "Transfer successful", nil)
+}
+
+// recordInviteAudit records an invitation binding created during registration
+// together with the reward snapshot the model grants. Password and OAuth
+// registration both call it once the new user exists, so self-invited account
+// farms leave a trail of inviter, invitee and granted rewards.
+func recordInviteAudit(c *gin.Context, inviterId int, invitee *model.User) {
+	if inviterId <= 0 || invitee == nil || invitee.Id <= 0 {
+		return
+	}
+	params := map[string]any{
+		"inviter_id":       inviterId,
+		"invitee_id":       invitee.Id,
+		"invitee_username": invitee.Username,
+	}
+	if inviter, err := model.GetUserById(inviterId, false); err == nil {
+		params["inviter_username"] = inviter.Username
+	}
+	// 奖励只在支付合规确认后发放，与 model.finishInsert 的判定保持一致。
+	rewarded := operation_setting.IsPaymentComplianceConfirmed()
+	params["rewarded"] = rewarded
+	if rewarded {
+		params["inviter_reward"] = logger.FormatQuota(common.QuotaForInviter)
+		params["invitee_reward"] = logger.FormatQuota(common.QuotaForInvitee)
+	}
+	// 注册流程可能没有完整请求上下文（例如测试或内部调用），缺失时只记录事件本身。
+	ip := ""
+	requestInfo := &model.AuditRequestInfo{Success: true}
+	if c.Request != nil {
+		ip = c.ClientIP()
+		requestInfo.Method = c.Request.Method
+		requestInfo.Route = c.FullPath()
+		requestInfo.Path = c.FullPath()
+		requestInfo.Status = c.Writer.Status()
+	}
+	model.RecordOperationAuditLog(invitee.Id, common.RoleCommonUser, auditContentEN("user.aff_invite", params), ip, "user.aff_invite", params, nil, requestInfo, c)
 }
 
 func GetAffCode(c *gin.Context) {

@@ -25,9 +25,9 @@ For commercial licensing, please contact support@quantumnous.com
 // ============================================================================
 
 const STORAGE_KEYS = {
-  AFFILIATE: 'aff',
-  STATUS: 'status',
-} as const
+  AFFILIATE: "aff",
+  STATUS: "status",
+} as const;
 
 // ============================================================================
 // Affiliate Code Storage
@@ -37,13 +37,13 @@ const STORAGE_KEYS = {
  * Get affiliate code from localStorage
  */
 export function getAffiliateCode(): string {
-  if (typeof window === 'undefined') return ''
+  if (typeof window === "undefined") return "";
   try {
-    return window.localStorage.getItem(STORAGE_KEYS.AFFILIATE) ?? ''
+    return window.localStorage.getItem(STORAGE_KEYS.AFFILIATE) ?? "";
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('Failed to get affiliate code:', error)
-    return ''
+    console.error("Failed to get affiliate code:", error);
+    return "";
   }
 }
 
@@ -51,11 +51,30 @@ export function getAffiliateCode(): string {
  * Save affiliate code to localStorage
  */
 export function saveAffiliateCode(code: string): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEYS.AFFILIATE, code)
+    window.localStorage.setItem(STORAGE_KEYS.AFFILIATE, code);
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('Failed to save affiliate code:', error)
+    console.error("Failed to save affiliate code:", error);
+  }
+}
+
+/**
+ * Remove the saved affiliate code, and drop the `aff` query parameter so a
+ * reload does not save it again.
+ */
+export function clearAffiliateCode(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.AFFILIATE);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has(STORAGE_KEYS.AFFILIATE)) {
+      url.searchParams.delete(STORAGE_KEYS.AFFILIATE);
+      window.history.replaceState(window.history.state, "", url.toString());
+    }
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error("Failed to clear affiliate code:", error);
   }
 }

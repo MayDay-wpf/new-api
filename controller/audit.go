@@ -45,6 +45,8 @@ var auditContentTemplates = map[string]string{
 	"user.email_binding_resend": "Email confirmation code resend",
 	"user.passkey_delete":       "Deleted a passkey",
 	"user.reset_passkey":        "Reset the user passkey",
+	"user.aff_transfer":         "Moved ${quota} from invitation rewards to balance",
+	"user.aff_invite":           "Registered with the invitation code of ${inviter_username} (ID: ${inviter_id})",
 	"option.update":             "Updated system setting ${key}",
 
 	"option.passkey_domains":           "Updated Passkey domains: removed ${domains}; affected ${known}; unknown ${unknown}",

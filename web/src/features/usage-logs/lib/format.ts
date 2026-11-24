@@ -477,6 +477,9 @@ const AUDIT_TEMPLATES: Record<string, string> = {
   'user.binding_bind': 'Account binding',
   'user.binding_unbind': 'Account unlinking',
   'user.email_binding_resend': 'Email confirmation code resend',
+  'user.aff_transfer': 'Moved {{quota}} of invitation rewards to balance',
+  'user.aff_invite':
+    'Registered with the invitation code of {{inviter_username}} (ID: {{inviter_id}})',
 
   login: 'Logged in successfully via {{method}}',
   // User management
@@ -629,6 +632,12 @@ export function renderAuditContent(
       return t('Batch deleted {{count}} redemption codes', { count })
     }
     return t('Batch deleted redemption codes (count not recorded)')
+  }
+  if (
+    op.action === 'user.aff_transfer' &&
+    other?.audit_info?.success === false
+  ) {
+    return t('Transfer failed')
   }
   const template = AUDIT_TEMPLATES[op.action]
   if (!template) return null

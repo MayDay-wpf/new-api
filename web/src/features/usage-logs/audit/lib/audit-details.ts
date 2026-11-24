@@ -164,6 +164,32 @@ export function auditFieldLabel(key: string, t: TFunction): string {
       return t('Base URL')
     case 'quota':
       return t('Quota')
+    case 'requested_quota':
+      return t('Requested quota')
+    case 'aff_quota_before':
+      return t('Invitation quota before transfer')
+    case 'aff_quota_after':
+      return t('Invitation quota after transfer')
+    case 'wallet_quota_before':
+      return t('Balance before transfer')
+    case 'wallet_quota_after':
+      return t('Balance after transfer')
+    case 'inviter_id':
+      return t('Inviter ID')
+    case 'inviter_username':
+      return t('Inviter')
+    case 'invitee_id':
+      return t('Invitee ID')
+    case 'invitee_username':
+      return t('Invitee')
+    case 'inviter_reward':
+      return t('Inviter Reward')
+    case 'invitee_reward':
+      return t('Invitee Reward')
+    case 'rewarded':
+      return t('Reward granted')
+    case 'success':
+      return t('Success')
     case 'admin_info':
       return t('Operator Admin')
     case 'audit_info':
@@ -564,6 +590,18 @@ export function buildAuditDetails(
       scope_denied: t('The access token lacks the required permission'),
       route_undeclared: t('Access tokens cannot use this feature'),
       session_required: t('This feature requires signing in to the dashboard'),
+    }
+    params.failure_reason =
+      reasons[params.failure_reason] ?? params.failure_reason
+  }
+  if (
+    action === 'user.aff_transfer' &&
+    typeof params.failure_reason === 'string'
+  ) {
+    const reasons: Record<string, string> = {
+      below_minimum: t('Transfer amount is below the minimum'),
+      insufficient_aff_quota: t('Invitation quota is insufficient'),
+      transfer_failed: t('Transfer failed'),
     }
     params.failure_reason =
       reasons[params.failure_reason] ?? params.failure_reason

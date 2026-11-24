@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { AxiosRequestConfig } from 'axios'
 
+import type { AdminUserBatchAction } from '@/features/auth/secure-verification'
 import type { PermissionCatalog } from '@/lib/admin-permissions'
 import { api } from '@/lib/api'
 import type { CustomOAuthBinding } from '@/lib/oauth'
@@ -31,6 +32,7 @@ import type {
   UserFormData,
   ManageUserAction,
   ManageUserQuotaPayload,
+  BatchManageUsersResult,
   ApiResponse,
 } from './types'
 
@@ -157,6 +159,23 @@ export async function manageUser(
   const res = await api.post(
     '/api/user/manage',
     { id, action },
+    securityProofConfig(proofToken)
+  )
+  return res.data
+}
+
+/**
+ * Apply one bulk action (delete or disable) to several users; requires an
+ * `admin.user.batch` proof bound to the action and the exact ID set
+ */
+export async function batchManageUsers(
+  ids: number[],
+  action: AdminUserBatchAction,
+  proofToken: string
+): Promise<ApiResponse<BatchManageUsersResult>> {
+  const res = await api.post(
+    '/api/user/batch',
+    { ids, action },
     securityProofConfig(proofToken)
   )
   return res.data

@@ -318,6 +318,10 @@ func handleOAuthLogin(c *gin.Context, provider oauth.Provider, oauthUser *oauth.
 			common.ApiErrorT(c, "Email address is already in use")
 			return
 		}
+		if errors.Is(err, model.ErrAffiliateCodeUnavailable) {
+			writeAffiliateCodeUnavailable(c)
+			return
+		}
 		switch err.(type) {
 		case *OAuthUserDeletedError:
 			common.ApiErrorT(c, "User has been deleted")
@@ -512,9 +516,9 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 	user.Status = common.UserStatusEnabled
 
 	// Handle affiliate code
-	inviterId := 0
-	if affiliateCode != "" {
-		inviterId, _ = model.GetUserIdByAffCode(affiliateCode)
+	inviterId, err := model.ResolveInviterIdByAffCode(affiliateCode)
+	if err != nil {
+		return nil, nil, err
 	}
 	user.InviterId = inviterId
 
@@ -576,6 +580,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 		user.FinalizeOAuthUserCreation(inviterId)
 	}
 
+	recordInviteAudit(c, inviterId, user)
 	return user, nil, nil
 }
 
@@ -587,6 +592,14 @@ func recordLegacyGitHubBindingAudit(c *gin.Context, user *model.User, success bo
 	model.RecordOperationAuditLog(user.Id, user.Role, auditContentEN("user.binding_bind", params), c.ClientIP(), "user.binding_bind", params, nil, &model.AuditRequestInfo{
 		Method: c.Request.Method, Route: c.FullPath(), Path: c.FullPath(), Status: c.Writer.Status(), Success: success,
 	}, c)
+}
+
+// writeAffiliateCodeUnavailable rejects a registration that carries a disabled
+// inviter's code; the web console prompts the user to remove the code.
+func writeAffiliateCodeUnavailable(c *gin.Context) {
+	common.ApiErrorStatus(c, http.StatusOK,
+		common.NewMessage("This invitation link is no longer valid. Remove the invitation code and register again."),
+		gin.H{"code": "AFFILIATE_CODE_UNAVAILABLE"})
 }
 
 // Error types for OAuth
