@@ -25,6 +25,7 @@ import {
   FlaskConical,
   Key,
   LayoutDashboard,
+  LifeBuoy,
   ListTodo,
   MessageSquare,
   PlugZap,
@@ -119,6 +120,12 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             icon: Wallet,
           },
           {
+            title: t('Support Tickets'),
+            url: '/tickets',
+            icon: LifeBuoy,
+            badge: badges.tickets,
+          },
+          {
             title: t('Profile'),
             url: '/profile',
             icon: User,
@@ -172,6 +179,13 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             title: t('Subscription Plans'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('Tickets'),
+            url: '/tickets/admin',
+            activeUrls: ['/tickets/admin/'],
+            icon: LifeBuoy,
+            badge: badges.tickets,
           },
           {
             title: t('System Info'),

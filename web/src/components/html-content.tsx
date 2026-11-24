@@ -27,6 +27,8 @@ interface HtmlContentProps {
   content: string
   className?: string
   variant?: HtmlContentVariant
+  /** Keep `blob:` object-URL media (locally fetched images) during sanitizing. */
+  allowBlobUrls?: boolean
 }
 
 const isolatedContentSandbox =
@@ -87,6 +89,16 @@ const isolatedSanitizeOptions = {
   FORCE_BODY: true,
 } satisfies Config
 
+/**
+ * DOMPurify's default URI allow-list has no `blob:` scheme, so an <img> whose
+ * src was swapped for an object URL loses that src during sanitization. Callers
+ * that render locally-fetched media (ticket images) opt in explicitly.
+ */
+const blobSafeSanitizeOptions = {
+  ALLOWED_URI_REGEXP:
+    /^(?:(?:blob|https?|ftps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i,
+} satisfies Config
+
 function hardenIsolatedHtml(html: string): string {
   if (typeof document === 'undefined') {
     return html
@@ -120,15 +132,22 @@ function hardenIsolatedHtml(html: string): string {
 
 function sanitizeHtmlContent(
   content: string,
-  variant: HtmlContentVariant
+  variant: HtmlContentVariant,
+  allowBlobUrls: boolean
 ): string {
   if (variant === 'isolated') {
-    const html = DOMPurify.sanitize(content, isolatedSanitizeOptions)
+    const options = allowBlobUrls
+      ? { ...isolatedSanitizeOptions, ...blobSafeSanitizeOptions }
+      : isolatedSanitizeOptions
+    const html = DOMPurify.sanitize(content, options)
 
     return hardenIsolatedHtml(html)
   }
 
-  return DOMPurify.sanitize(content)
+  return DOMPurify.sanitize(
+    content,
+    allowBlobUrls ? blobSafeSanitizeOptions : undefined
+  )
 }
 
 function syncDarkClass(wrapper: HTMLElement): void {
@@ -185,9 +204,10 @@ function IsolatedHtmlContent(props: {
 
 export function HtmlContent(props: HtmlContentProps) {
   const variant = props.variant ?? 'inline'
+  const allowBlobUrls = props.allowBlobUrls ?? false
   const html = useMemo(
-    () => sanitizeHtmlContent(props.content, variant),
-    [props.content, variant]
+    () => sanitizeHtmlContent(props.content, variant, allowBlobUrls),
+    [props.content, variant, allowBlobUrls]
   )
 
   if (variant === 'isolated') {

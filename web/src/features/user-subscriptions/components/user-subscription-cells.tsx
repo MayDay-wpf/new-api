@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadge } from '@/components/status-badge'
@@ -103,33 +103,6 @@ export function SubscriptionUsageCell(props: {
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const cancelClose = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current)
-      closeTimerRef.current = null
-    }
-  }
-
-  const openPopover = () => {
-    cancelClose()
-    setOpen(true)
-  }
-
-  const scheduleClose = () => {
-    cancelClose()
-    closeTimerRef.current = setTimeout(() => setOpen(false), 120)
-  }
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current)
-      }
-    }
-  }, [])
-
   const sub = props.row.subscription
   // eslint-disable-next-line react-hooks/purity
   const now = Math.floor(Date.now() / 1000)
@@ -210,14 +183,10 @@ export function SubscriptionUsageCell(props: {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         nativeButton={false}
+        openOnHover
+        delay={0}
         render={
-          <div
-            className='min-w-[160px] cursor-help space-y-1'
-            onMouseEnter={openPopover}
-            onMouseLeave={scheduleClose}
-            onFocus={openPopover}
-            onBlur={scheduleClose}
-          >
+          <div className='min-w-[160px] cursor-help space-y-1'>
             {triggerContent}
           </div>
         }
@@ -225,8 +194,6 @@ export function SubscriptionUsageCell(props: {
       <PopoverContent
         align='start'
         className='max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto'
-        onMouseEnter={openPopover}
-        onMouseLeave={scheduleClose}
       >
         <div className='flex items-center justify-between gap-3'>
           <span className='font-medium'>{t('Usage')}</span>

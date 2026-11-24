@@ -176,6 +176,35 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		// Support tickets (user side)
+		ticketRoute := apiRouter.Group("/ticket")
+		ticketRoute.Use(middleware.UserAuth())
+		{
+			ticketRoute.GET("/", controller.GetUserTickets)
+			ticketRoute.POST("/", middleware.CriticalRateLimit(), controller.CreateTicket)
+			ticketRoute.GET("/unread-count", controller.GetUnreadCount)
+			ticketRoute.GET("/:id", controller.GetTicketDetail)
+			ticketRoute.POST("/:id/reply", middleware.CriticalRateLimit(), controller.ReplyTicket)
+			ticketRoute.POST("/:id/close", middleware.CriticalRateLimit(), controller.CloseTicket)
+		}
+		// Ticket image upload / serve. Kept on a separate prefix so the
+		// multi-segment file path does not collide with /ticket/:id.
+		ticketImageRoute := apiRouter.Group("/ticket-image")
+		ticketImageRoute.Use(middleware.UserAuth())
+		{
+			ticketImageRoute.POST("/", middleware.CriticalRateLimit(), controller.UploadTicketImage)
+			ticketImageRoute.GET("/:month/:name", controller.ServeTicketImage)
+		}
+		// Support tickets (admin side)
+		ticketAdminRoute := apiRouter.Group("/ticket/admin")
+		ticketAdminRoute.Use(middleware.AdminAuth())
+		{
+			ticketAdminRoute.GET("/", controller.AdminGetTickets)
+			ticketAdminRoute.GET("/:id", controller.AdminGetTicketDetail)
+			ticketAdminRoute.POST("/:id/reply", middleware.CriticalRateLimit(), controller.AdminReplyTicket)
+			ticketAdminRoute.POST("/:id/close", middleware.CriticalRateLimit(), controller.AdminCloseTicket)
+		}
+
 		// Subscription billing (plans, purchase, admin management)
 		subscriptionRoute := apiRouter.Group("/subscription")
 		subscriptionRoute.Use(middleware.UserAuth())

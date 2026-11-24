@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -506,7 +507,9 @@ func RevokeCoupon(couponId int) (*Coupon, int64, error) {
 	return &coupon, revoked, nil
 }
 
-// GetCoupons lists coupon batches for administrators, newest first.
+// GetCoupons lists coupon batches for administrators. Valid batches (active
+// and not expired) come first, then revoked or expired ones; newest first
+// inside each group.
 func GetCoupons(keyword string, pageInfo *common.PageInfo) ([]*Coupon, int64, error) {
 	query := DB.Model(&Coupon{})
 	keyword = strings.TrimSpace(keyword)
@@ -529,7 +532,13 @@ func GetCoupons(keyword string, pageInfo *common.PageInfo) ([]*Coupon, int64, er
 		return nil, 0, err
 	}
 	var coupons []*Coupon
-	if err := query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&coupons).Error; err != nil {
+	// Valid batches first (active and not expired), invalid ones (revoked or
+	// expired) after them; within each group the newest batch comes first.
+	order := fmt.Sprintf(
+		"CASE WHEN status = %d AND (expires_at = 0 OR expires_at > %d) THEN 0 ELSE 1 END, id desc",
+		CouponStatusActive, common.GetTimestamp(),
+	)
+	if err := query.Order(order).Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&coupons).Error; err != nil {
 		return nil, 0, err
 	}
 	if len(coupons) == 0 {

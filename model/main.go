@@ -381,6 +381,8 @@ func migrateDB() error {
 		&UserAccessToken{},
 		&Coupon{},
 		&UserCoupon{},
+		&Ticket{},
+		&TicketMessage{},
 	)
 	if err != nil {
 		return err
