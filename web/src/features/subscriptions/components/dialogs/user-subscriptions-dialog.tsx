@@ -60,7 +60,7 @@ import {
   deleteUserSubscription,
   resetUserSubscriptionsByPlan,
 } from '../../api'
-import { formatTimestamp } from '../../lib'
+import { formatPlanPrice, formatTimestamp } from '../../lib'
 import {
   formatQuotaLimitWindow,
   getQuotaLimitUsage,
@@ -286,7 +286,10 @@ export function UserSubscriptionsDialog(props: Props) {
               <Combobox
                 options={plans.map((p) => ({
                   value: String(p.plan.id),
-                  label: `${p.plan.title} ($${Number(p.plan.price_amount || 0).toFixed(2)})`,
+                  label: `${p.plan.title} (${formatPlanPrice(
+                    p.plan.price_amount,
+                    p.plan.currency
+                  )})`,
                 }))}
                 value={selectedPlanId}
                 onValueChange={(v) => v !== null && setSelectedPlanId(v)}

@@ -1853,6 +1853,7 @@
     "Cumulative usage": "Cumulative usage",
     "Currency": "Currency",
     "Currency & Display": "Currency & Display",
+    "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.": "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.",
     "Current": "Current",
     "Current Balance": "Current Balance",
     "Current Billing": "Current Billing",

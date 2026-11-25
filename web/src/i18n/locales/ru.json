@@ -1853,6 +1853,7 @@
     "Cumulative usage": "Суммарное использование",
     "Currency": "Валюта",
     "Currency & Display": "Валюта и отображение",
+    "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.": "Валюта, в которой отображается цена этого тарифа. Валюту фактического списания по-прежнему определяет платёжный шлюз.",
     "Current": "Текущий",
     "Current Balance": "Текущий баланс",
     "Current Billing": "Текущие счета",

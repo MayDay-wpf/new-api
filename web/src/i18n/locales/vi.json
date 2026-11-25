@@ -1853,6 +1853,7 @@
     "Cumulative usage": "Mức sử dụng tích lũy",
     "Currency": "Tiền tệ",
     "Currency & Display": "Tiền tệ & hiển thị",
+    "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.": "Đơn vị tiền tệ dùng để hiển thị giá của gói này. Cổng thanh toán vẫn quyết định đơn vị tiền tệ thực tế được tính.",
     "Current": "Hiện tại",
     "Current Balance": "Số Dư Hiện Tại",
     "Current Billing": "Thanh toán hiện tại",

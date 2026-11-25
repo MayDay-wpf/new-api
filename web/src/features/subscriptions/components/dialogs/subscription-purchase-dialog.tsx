@@ -50,6 +50,7 @@ import {
 } from '../../api'
 import {
   formatDuration,
+  formatPlanPrice,
   formatQuotaLimitWindow,
   formatResetPeriod,
   quotaLimitKey,
@@ -119,7 +120,6 @@ export function SubscriptionPurchaseDialog(props: Props) {
     ? selectedCoupons.map((coupon) => coupon.id)
     : undefined
   const onlineAmountTooLow = hasCoupons && !isOnlinePayableAmount(finalAmount)
-  const price = priceAmount.toFixed(2)
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
@@ -358,14 +358,19 @@ export function SubscriptionPurchaseDialog(props: Props) {
                 <span className='text-muted-foreground text-sm'>
                   {t('Original price')}
                 </span>
-                <span className='text-sm tabular-nums'>${price}</span>
+                <span className='text-sm tabular-nums'>
+                  {formatPlanPrice(priceAmount, plan.currency)}
+                </span>
               </div>
               <div className='flex items-center justify-between'>
                 <span className='text-muted-foreground text-sm'>
                   {t('Coupon discount')}
                 </span>
                 <span className='text-sm tabular-nums'>
-                  -${couponSummary.appliedDiscount.toFixed(2)}
+                  {`-${formatPlanPrice(
+                    couponSummary.appliedDiscount,
+                    plan.currency
+                  )}`}
                 </span>
               </div>
             </>
@@ -373,7 +378,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
             <span className='text-primary text-lg font-bold'>
-              ${finalAmount.toFixed(2)}
+              {formatPlanPrice(finalAmount, plan.currency)}
             </span>
           </div>
         </div>

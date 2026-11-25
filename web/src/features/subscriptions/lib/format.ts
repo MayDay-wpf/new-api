@@ -72,6 +72,63 @@ export function formatTimestamp(ts: number): string {
 }
 
 // ============================================================================
+// Plan price display
+// ============================================================================
+
+/** Currencies offered by the plan editor. The stored code is an ISO 4217 one. */
+export const PLAN_CURRENCIES = ['USD', 'CNY', 'EUR', 'GBP', 'JPY'] as const
+
+export type PlanCurrency = (typeof PLAN_CURRENCIES)[number]
+
+/** Fall back to USD for anything that is not a plausible ISO 4217 code. */
+export function normalizePlanCurrency(currency?: string | null): string {
+  const code = (currency || '').trim().toUpperCase()
+  return code.length === 3 ? code : 'USD'
+}
+
+/** Narrow currency symbol for picker labels, e.g. USD → $, CNY → ¥. */
+export function getPlanCurrencySymbol(currency?: string | null): string {
+  const code = normalizePlanCurrency(currency)
+  try {
+    const parts = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: code,
+      currencyDisplay: 'narrowSymbol',
+    }).formatToParts(0)
+    return parts.find((part) => part.type === 'currency')?.value || code
+  } catch {
+    return code
+  }
+}
+
+/**
+ * Format a plan price in the currency stored on that plan.
+ *
+ * This deliberately does NOT go through `@/lib/currency`: those helpers convert
+ * site-wide USD quota into the admin's display currency, while a plan price is
+ * already an amount in its own currency and must never be converted.
+ */
+export function formatPlanPrice(
+  amount: number | null | undefined,
+  currency?: string | null
+): string {
+  const code = normalizePlanCurrency(currency)
+  const value = Number(amount || 0)
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: code,
+      currencyDisplay: 'narrowSymbol',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+  } catch {
+    // Unknown currency code: keep the number readable with its raw code.
+    return `${code} ${value.toFixed(2)}`
+  }
+}
+
+// ============================================================================
 // Independent quota windows
 // ============================================================================
 

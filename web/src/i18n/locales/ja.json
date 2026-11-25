@@ -1853,6 +1853,7 @@
     "Cumulative usage": "累積使用量",
     "Currency": "通貨",
     "Currency & Display": "通貨と表示",
+    "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.": "このプラン価格の表示に使用する通貨です。実際の請求通貨は決済ゲートウェイが決定します。",
     "Current": "現在",
     "Current Balance": "現在の残高",
     "Current Billing": "現在の請求",

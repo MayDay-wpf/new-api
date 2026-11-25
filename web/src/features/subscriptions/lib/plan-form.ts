@@ -22,6 +22,7 @@ import { z } from "zod";
 import { parseQuotaFromDollars, quotaUnitsToDollars } from "@/lib/format";
 
 import type { SubscriptionPlan, PlanPayload } from "../types";
+import { normalizePlanCurrency } from "./format";
 
 export const planQuotaLimitFormSchema = z.object({
   period: z.enum(["daily", "weekly", "monthly", "custom"]),
@@ -36,6 +37,9 @@ export function getPlanFormSchema(t: TFunction) {
     title: z.string().min(1, t("Please enter plan title")),
     subtitle: z.string().optional(),
     price_amount: z.coerce.number().min(0, t("Please enter amount")),
+    // ISO 4217 code; the plan editor offers PLAN_CURRENCIES, but a plan saved
+    // with another code must still round-trip without breaking the form.
+    currency: z.string().min(1),
     duration_unit: z.enum(["year", "month", "day", "hour", "custom"]),
     duration_value: z.coerce.number().min(1),
     custom_seconds: z.coerce.number().min(0).optional(),
@@ -54,7 +58,7 @@ export function getPlanFormSchema(t: TFunction) {
                 code: "custom",
                 path: [index, "custom_seconds"],
                 message: t(
-                  "Custom quota limit window must be greater than 0 seconds"
+                  "Custom quota limit window must be greater than 0 seconds",
                 ),
               });
             }
@@ -95,6 +99,7 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   title: "",
   subtitle: "",
   price_amount: 0,
+  currency: "USD",
   duration_unit: "month",
   duration_value: 1,
   custom_seconds: 0,
@@ -116,7 +121,7 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
 // Legacy plans only carried one reset cycle; surface it as the first limit so
 // editing such a plan keeps its effective per-cycle quota.
 function planQuotaLimitsToFormValues(
-  plan: Partial<SubscriptionPlan>
+  plan: Partial<SubscriptionPlan>,
 ): PlanQuotaLimitFormValue[] {
   const limits = plan.quota_limits || [];
   if (limits.length > 0) {
@@ -144,6 +149,7 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
     title: plan.title || "",
     subtitle: plan.subtitle || "",
     price_amount: Number(plan.price_amount || 0),
+    currency: normalizePlanCurrency(plan.currency),
     duration_unit: plan.duration_unit || "month",
     duration_value: Number(plan.duration_value || 1),
     custom_seconds: Number(plan.custom_seconds || 0),
@@ -168,7 +174,7 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
     .filter(
       (limit) =>
         Number(limit.amount || 0) > 0 &&
-        (limit.period !== "custom" || Number(limit.custom_seconds || 0) > 0)
+        (limit.period !== "custom" || Number(limit.custom_seconds || 0) > 0),
     )
     .map((limit) => ({
       period: limit.period,
@@ -180,7 +186,7 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
     plan: {
       ...values,
       price_amount: Number(values.price_amount || 0),
-      currency: "USD",
+      currency: normalizePlanCurrency(values.currency),
       duration_value: Number(values.duration_value || 0),
       custom_seconds: Number(values.custom_seconds || 0),
       quota_limits: quotaLimits,

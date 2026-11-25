@@ -819,6 +819,9 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 	if p.AllowWalletOverflow == nil {
 		p.AllowWalletOverflow = common.GetPointer(true)
 	}
+	if p.Currency == "" {
+		p.Currency = "USD"
+	}
 	p.QuotaLimits = normalizeQuotaLimitsLenient(p.QuotaLimits)
 }
 

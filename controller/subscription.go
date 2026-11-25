@@ -230,6 +230,26 @@ type AdminUpsertSubscriptionPlanRequest struct {
 	Plan model.SubscriptionPlan `json:"plan"`
 }
 
+// normalizePlanCurrency upper-cases and validates an ISO 4217 currency code.
+// An empty value falls back to USD; anything else must be exactly three
+// letters. The code is display metadata only — the payment gateway still
+// decides the currency actually charged.
+func normalizePlanCurrency(raw string) (string, bool) {
+	code := strings.ToUpper(strings.TrimSpace(raw))
+	if code == "" {
+		return "USD", true
+	}
+	if len(code) != 3 {
+		return "", false
+	}
+	for _, r := range code {
+		if r < 'A' || r > 'Z' {
+			return "", false
+		}
+	}
+	return code, true
+}
+
 func AdminCreateSubscriptionPlan(c *gin.Context) {
 	if !requirePaymentCompliance(c) {
 		return
@@ -253,10 +273,12 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		common.ApiErrorT(c, "Price cannot exceed 9999")
 		return
 	}
-	if req.Plan.Currency == "" {
-		req.Plan.Currency = "USD"
+	currency, ok := normalizePlanCurrency(req.Plan.Currency)
+	if !ok {
+		common.ApiErrorT(c, "Currency code is invalid")
+		return
 	}
-	req.Plan.Currency = "USD"
+	req.Plan.Currency = currency
 	if req.Plan.AllowBalancePay == nil {
 		req.Plan.AllowBalancePay = common.GetPointer(true)
 	}
@@ -335,10 +357,12 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.Id = id
-	if req.Plan.Currency == "" {
-		req.Plan.Currency = "USD"
+	currency, ok := normalizePlanCurrency(req.Plan.Currency)
+	if !ok {
+		common.ApiErrorT(c, "Currency code is invalid")
+		return
 	}
-	req.Plan.Currency = "USD"
+	req.Plan.Currency = currency
 	if req.Plan.DurationUnit == "" {
 		req.Plan.DurationUnit = model.SubscriptionDurationMonth
 	}

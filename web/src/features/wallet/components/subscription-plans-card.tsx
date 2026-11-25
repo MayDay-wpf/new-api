@@ -53,6 +53,7 @@ import {
 import { SubscriptionPurchaseDialog } from "@/features/subscriptions/components/dialogs/subscription-purchase-dialog";
 import {
   formatDuration,
+  formatPlanPrice,
   formatQuotaLimitWindow,
   formatResetPeriod,
   getQuotaLimitResetTime,
@@ -682,7 +683,10 @@ export function SubscriptionPlansCard({
               const plan = p?.plan;
               if (!plan) return null;
               const totalAmount = Number(plan.total_amount || 0);
-              const price = Number(plan.price_amount || 0).toFixed(2);
+              const price = formatPlanPrice(
+                plan.price_amount,
+                plan.currency,
+              );
               const isPopular = index === 0 && plans.length > 1;
               const limit = Number(plan.max_purchase_per_user || 0);
               const count = planPurchaseCountMap.get(plan.id) || 0;
@@ -762,7 +766,7 @@ export function SubscriptionPlansCard({
 
                     <div className="py-2">
                       <span className="text-primary text-2xl font-bold">
-                        ${price}
+                        {price}
                       </span>
                     </div>
 

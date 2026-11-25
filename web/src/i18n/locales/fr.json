@@ -1853,6 +1853,7 @@
     "Cumulative usage": "Utilisation cumulée",
     "Currency": "Devise",
     "Currency & Display": "Devise et affichage",
+    "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.": "Devise utilisée pour afficher le prix de cette offre. La devise réellement facturée reste décidée par la passerelle de paiement.",
     "Current": "Actuelle",
     "Current Balance": "Solde actuel",
     "Current Billing": "Facturation actuelle",

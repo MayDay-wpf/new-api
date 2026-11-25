@@ -25,7 +25,7 @@ import {
   Settings2,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -85,10 +85,13 @@ import {
   getQuotaLimitPeriodOptions,
 } from "../constants";
 import {
+  getPlanCurrencySymbol,
   getPlanFormSchema,
+  PLAN_CURRENCIES,
   PLAN_FORM_DEFAULTS,
   planToFormValues,
   formValuesToPlanPayload,
+  normalizePlanCurrency,
   type PlanFormValues,
 } from "../lib";
 import type { PlanRecord } from "../types";
@@ -173,6 +176,23 @@ export function SubscriptionsMutateDrawer({
   // Gate "+ Create on Pancake" on the same checks the mint handler runs.
   const watchedTitle = form.watch("title");
   const watchedPrice = form.watch("price_amount");
+  const watchedCurrency = form.watch("currency");
+  // PLAN_CURRENCIES is the curated list, but a plan saved earlier with another
+  // ISO code must keep its value selectable instead of silently rendering empty.
+  const currencyOptions = useMemo(() => {
+    const codes = new Set<string>(PLAN_CURRENCIES);
+    const storedCurrency = currentRow?.plan?.currency;
+    if (storedCurrency) {
+      codes.add(normalizePlanCurrency(storedCurrency));
+    }
+    if (watchedCurrency) {
+      codes.add(normalizePlanCurrency(watchedCurrency));
+    }
+    return [...codes].map((code) => ({
+      value: code,
+      label: `${code} · ${getPlanCurrencySymbol(code)}`,
+    }));
+  }, [currentRow?.plan?.currency, watchedCurrency]);
   const pancakeCreateReady =
     typeof watchedTitle === "string" &&
     watchedTitle.trim().length > 0 &&
@@ -387,41 +407,81 @@ export function SubscriptionsMutateDrawer({
 
                 <FormField
                   control={form.control}
-                  name="total_amount"
+                  name="currency"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>
-                        {t("Quota ({{currency}})", { currency: currencyLabel })}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          min={0}
-                          step={tokensOnly ? 1 : 0.01}
-                          placeholder={
-                            tokensOnly
-                              ? t("Enter quota in tokens")
-                              : t("Enter quota in {{currency}}", {
-                                  currency: currencyLabel,
-                                })
-                          }
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseFloat(e.target.value) || 0,
-                            )
-                          }
-                        />
-                      </FormControl>
+                      <FormLabel>{t("Currency")}</FormLabel>
+                      <Select
+                        items={currencyOptions}
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {currencyOptions.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                       <FormDescription>
                         {t(
-                          "Total quota included in the plan. 0 means unlimited. Per-window caps are configured below.",
+                          "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.",
                         )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                <div className="sm:col-span-2">
+                  <FormField
+                    control={form.control}
+                    name="total_amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t("Quota ({{currency}})", {
+                            currency: currencyLabel,
+                          })}
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type="number"
+                            min={0}
+                            step={tokensOnly ? 1 : 0.01}
+                            placeholder={
+                              tokensOnly
+                                ? t("Enter quota in tokens")
+                                : t("Enter quota in {{currency}}", {
+                                    currency: currencyLabel,
+                                  })
+                            }
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseFloat(e.target.value) || 0,
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            "Total quota included in the plan. 0 means unlimited. Per-window caps are configured below.",
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

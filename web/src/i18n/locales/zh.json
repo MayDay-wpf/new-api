@@ -1853,6 +1853,7 @@
     "Cumulative usage": "累计用量",
     "Currency": "货币",
     "Currency & Display": "货币与展示",
+    "Currency used to display this plan's price. The payment gateway still decides the currency actually charged.": "用于展示该订阅计划价格的货币。实际扣款币种仍由支付网关决定。",
     "Current": "当前",
     "Current Balance": "当前余额",
     "Current Billing": "当前计费",
