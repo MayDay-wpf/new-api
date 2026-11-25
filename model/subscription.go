@@ -592,6 +592,12 @@ type SubscriptionPlan struct {
 	PriceAmount float64 `json:"price_amount" gorm:"type:decimal(10,6);not null;default:0"`
 	Currency    string  `json:"currency" gorm:"type:varchar(8);not null;default:'USD'"`
 
+	// ResetPriceMultiplier marks up the plan price for a paid quota reset:
+	// reset price = PriceAmount * (1 + ResetPriceMultiplier). 0.5 means 1.5x.
+	ResetPriceMultiplier float64 `json:"reset_price_multiplier" gorm:"type:decimal(10,4);not null;default:0"`
+	// ResetPrice is the computed amount charged for one paid quota reset.
+	ResetPrice float64 `json:"reset_price" gorm:"-"`
+
 	DurationUnit  string `json:"duration_unit" gorm:"type:varchar(16);not null;default:'month'"`
 	DurationValue int    `json:"duration_value" gorm:"type:int;not null;default:1"`
 	CustomSeconds int64  `json:"custom_seconds" gorm:"type:bigint;not null;default:0"`
@@ -823,7 +829,100 @@ func (p *SubscriptionPlan) NormalizeDefaults() {
 		p.Currency = "USD"
 	}
 	p.QuotaLimits = normalizeQuotaLimitsLenient(p.QuotaLimits)
+	p.ResetPrice = p.CalculateResetPrice()
 }
+
+// CalculateResetPrice returns the amount charged for one paid quota reset. The
+// plan price is prorated to the longest configured quota window (a weekly
+// window on a monthly plan costs about a quarter of the plan price), then the
+// configured markup is applied. Durations are compared in 30-day months so a
+// weekly / daily / custom window and a month-based plan stay comparable.
+func (p *SubscriptionPlan) CalculateResetPrice() float64 {
+	if p == nil {
+		return 0
+	}
+	planMonths := 0.0
+	switch p.DurationUnit {
+	case SubscriptionDurationYear:
+		planMonths = float64(p.DurationValue) * 12
+	case SubscriptionDurationMonth:
+		planMonths = float64(p.DurationValue)
+	case SubscriptionDurationDay:
+		planMonths = float64(p.DurationValue) / 30
+	case SubscriptionDurationHour:
+		planMonths = float64(p.DurationValue) / (30 * 24)
+	case SubscriptionDurationCustom:
+		if p.CustomSeconds > 0 {
+			planMonths = float64(p.CustomSeconds) / float64(30*24*3600)
+		}
+	}
+	if planMonths <= 0 {
+		return 0
+	}
+
+	longestWindowMonths := 0.0
+	for _, limit := range normalizeQuotaLimitsLenient(p.QuotaLimits) {
+		windowMonths := 0.0
+		switch NormalizeQuotaLimitPeriod(limit.Period) {
+		case SubscriptionResetDaily:
+			windowMonths = 1.0 / 30
+		case SubscriptionResetWeekly:
+			windowMonths = 7.0 / 30
+		case SubscriptionResetMonthly:
+			windowMonths = 1
+		case SubscriptionResetCustom:
+			if limit.CustomSeconds > 0 {
+				windowMonths = float64(limit.CustomSeconds) / float64(30*24*3600)
+			}
+		}
+		if windowMonths > longestWindowMonths {
+			longestWindowMonths = windowMonths
+		}
+	}
+	if longestWindowMonths <= 0 {
+		return 0
+	}
+
+	ratio := decimal.NewFromFloat(longestWindowMonths).Div(decimal.NewFromFloat(planMonths))
+	if ratio.GreaterThan(decimal.NewFromInt(1)) {
+		ratio = decimal.NewFromInt(1)
+	}
+	return decimal.NewFromFloat(p.PriceAmount).
+		Mul(ratio).
+		Mul(decimal.NewFromInt(1).Add(decimal.NewFromFloat(p.ResetPriceMultiplier))).
+		Round(2).
+		InexactFloat64()
+}
+
+// paidResetScope selects every independent quota window a paid reset clears.
+// Only windows the administrator explicitly configured are resettable: the
+// legacy single reset cycle (daily / weekly / monthly / custom) is not a
+// separate quota, so a plan that only carries that cycle has nothing to sell as
+// a paid reset.
+func paidResetScope(plan *SubscriptionPlan) *SubscriptionResetScope {
+	if plan == nil {
+		return nil
+	}
+	limits := normalizeQuotaLimitsLenient(plan.QuotaLimits)
+	if len(limits) == 0 {
+		return nil
+	}
+	scope := &SubscriptionResetScope{LimitKeys: make([]string, 0, len(limits))}
+	for _, limit := range limits {
+		scope.LimitKeys = append(scope.LimitKeys, limit.Key())
+	}
+	return scope
+}
+
+// SupportsPaidReset reports whether the plan has an independent quota window a
+// paid reset can clear.
+func (p *SubscriptionPlan) SupportsPaidReset() bool {
+	return paidResetScope(p) != nil
+}
+
+// SubscriptionOrderKindReset marks an order that only clears the quota counters
+// of an existing active subscription; any other kind is a plan purchase.
+const SubscriptionOrderKindReset = "reset"
 
 // Subscription order (payment -> webhook -> create UserSubscription)
 type SubscriptionOrder struct {
@@ -831,6 +930,10 @@ type SubscriptionOrder struct {
 	UserId int     `json:"user_id" gorm:"index"`
 	PlanId int     `json:"plan_id" gorm:"index"`
 	Money  float64 `json:"money"`
+
+	// Kind distinguishes a plan purchase from a paid quota reset (empty rows
+	// written before this field existed are purchases).
+	Kind string `json:"kind" gorm:"type:varchar(16);not null;default:'purchase'"`
 
 	TradeNo         string `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string `json:"payment_method" gorm:"type:varchar(50)"`
@@ -1429,6 +1532,8 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 	var logMoney float64
 	var logPaymentMethod string
 	var upgradeGroup string
+	var isResetOrder bool
+	var resetCount int
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var order SubscriptionOrder
 		if err := lockForUpdate(tx).Where(refCol+" = ?", tradeNo).First(&order).Error; err != nil {
@@ -1450,25 +1555,56 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if !plan.Enabled {
 			// still allow completion for already purchased orders
 		}
-		// 锁定用户行：并发完成同一用户的不同订单（包括多实例部署下）时，
-		// 使 CreateUserSubscriptionFromPlanTx 的 MaxPurchasePerUser 检查按用户串行。
-		var userRow User
-		if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
-			return err
-		}
-		// Lock the plan row so stock counting stays serialized with balance purchases and
-		// admin grants. The order is already paid, so it is completed even if stock ran out
-		// concurrently; new orders are blocked by CheckSubscriptionPlanStock.
-		var planRow SubscriptionPlan
-		if err := lockForUpdate(tx).Select("id").Where("id = ?", plan.Id).First(&planRow).Error; err != nil {
-			return err
-		}
-		subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
-		if err != nil {
-			return err
-		}
-		if subscription.PrevUserGroup != "" {
-			upgradeGroup = strings.TrimSpace(subscription.UpgradeGroup)
+		if order.Kind == SubscriptionOrderKindReset {
+			// A paid reset only clears quota counters: it never creates, renews or
+			// extends a subscription, and takes no stock slot.
+			isResetOrder = true
+			now := GetDBTimestamp()
+			hasActive, err := hasActiveUserSubscriptionForPlanTx(tx, order.UserId, plan.Id, now)
+			if err != nil {
+				return err
+			}
+			if hasActive {
+				scope := paidResetScope(plan)
+				if scope == nil {
+					// The plan no longer has a counter to clear (the administrator
+					// removed it while the checkout was open). Finish the order
+					// instead of leaving it pending forever.
+					common.SysLog(common.LogText("paid subscription reset could not be applied: plan %d has no resettable quota trade_no=%s", plan.Id, order.TradeNo))
+				} else {
+					result, err := resetUserSubscriptionsByPlanTx(tx, order.UserId, plan, now, scope, false)
+					if err != nil {
+						return err
+					}
+					resetCount = result.ResetCount
+				}
+			} else {
+				// The subscription ended while the checkout was open. The payment is
+				// already captured, so finish the order and leave an audit trail
+				// instead of failing every gateway retry forever.
+				common.SysLog(common.LogText("paid subscription reset could not be applied: user %d has no active subscription for plan %d trade_no=%s", order.UserId, plan.Id, order.TradeNo))
+			}
+		} else {
+			// 锁定用户行：并发完成同一用户的不同订单（包括多实例部署下）时，
+			// 使 CreateUserSubscriptionFromPlanTx 的 MaxPurchasePerUser 检查按用户串行。
+			var userRow User
+			if err := lockForUpdate(tx).Select("id").Where("id = ?", order.UserId).First(&userRow).Error; err != nil {
+				return err
+			}
+			// Lock the plan row so stock counting stays serialized with balance purchases and
+			// admin grants. The order is already paid, so it is completed even if stock ran out
+			// concurrently; new orders are blocked by CheckSubscriptionPlanStock.
+			var planRow SubscriptionPlan
+			if err := lockForUpdate(tx).Select("id").Where("id = ?", plan.Id).First(&planRow).Error; err != nil {
+				return err
+			}
+			subscription, err := CreateUserSubscriptionFromPlanTx(tx, order.UserId, plan, "order")
+			if err != nil {
+				return err
+			}
+			if subscription.PrevUserGroup != "" {
+				upgradeGroup = strings.TrimSpace(subscription.UpgradeGroup)
+			}
 		}
 		if err := upsertSubscriptionTopUpTx(tx, &order); err != nil {
 			return err
@@ -1500,11 +1636,20 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		refreshSubscriptionUserGroupCache(logUserId, common.LogText("subscription payment completion"))
 	}
 	if logUserId > 0 {
-		RecordLog(logUserId, LogTypeTopup, common.NewMessage("Subscription purchased, plan: {{plan}}, payment amount: {{amount}}, payment method: {{method}}", map[string]any{
-			"plan":   logPlanTitle,
-			"amount": fmt.Sprintf("%.2f", logMoney),
-			"method": logPaymentMethod,
-		}))
+		if isResetOrder {
+			RecordLog(logUserId, LogTypeTopup, common.NewMessage("Subscription quota reset, plan: {{plan}}, payment amount: {{amount}}, payment method: {{method}}, reset subscriptions: {{count}}", map[string]any{
+				"plan":   logPlanTitle,
+				"amount": fmt.Sprintf("%.2f", logMoney),
+				"method": logPaymentMethod,
+				"count":  resetCount,
+			}))
+		} else {
+			RecordLog(logUserId, LogTypeTopup, common.NewMessage("Subscription purchased, plan: {{plan}}, payment amount: {{amount}}, payment method: {{method}}", map[string]any{
+				"plan":   logPlanTitle,
+				"amount": fmt.Sprintf("%.2f", logMoney),
+				"method": logPaymentMethod,
+			}))
+		}
 	}
 	return nil
 }
@@ -1746,6 +1891,114 @@ func PurchaseSubscriptionWithBalance(userId int, planId int, couponIds []int) er
 	return nil
 }
 
+// PurchaseSubscriptionQuotaResetWithBalance charges the wallet and clears the
+// quota counters a paid reset covers for the user's active subscription of
+// planId, in one transaction. couponIds are applied to the plan's reset price
+// and marked used together with the charge.
+func PurchaseSubscriptionQuotaResetWithBalance(userId int, planId int, couponIds []int) error {
+	if userId <= 0 || planId <= 0 {
+		return errors.New("invalid userId or planId")
+	}
+
+	var logPlanTitle string
+	var logMoney float64
+	var chargedQuota int
+	var resetCount int
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		plan, err := getSubscriptionPlanByIdTx(tx, planId)
+		if err != nil {
+			return err
+		}
+		if !plan.Enabled {
+			return common.NewMessage("Subscription plan is not enabled")
+		}
+		if plan.AllowBalancePay != nil && !*plan.AllowBalancePay {
+			return common.NewMessage("This plan does not allow balance redemption")
+		}
+		scope := paidResetScope(plan)
+		if scope == nil {
+			return common.NewMessage("This plan does not support paid quota reset")
+		}
+
+		var user User
+		if err := lockForUpdate(tx).Where("id = ?", userId).First(&user).Error; err != nil {
+			return err
+		}
+		now := GetDBTimestamp()
+		hasActive, err := hasActiveUserSubscriptionForPlanTx(tx, userId, plan.Id, now)
+		if err != nil {
+			return err
+		}
+		if !hasActive {
+			return common.NewMessage("You have no active subscription for this plan")
+		}
+
+		tradeNo := fmt.Sprintf("SUBRESETUSR%dNO%s%d", userId, common.GetRandomString(6), time.Now().UnixNano())
+		couponResult, err := applyUserCouponsTx(tx, userId, couponIds, CouponScopeSubscription, plan.CalculateResetPrice(), tradeNo, UserCouponStatusUsed)
+		if err != nil {
+			return err
+		}
+		payMoney := couponResult.FinalAmount
+		requiredQuota, err := calcSubscriptionBalanceQuota(payMoney)
+		if err != nil {
+			return err
+		}
+		if requiredQuota > 0 && user.Quota < requiredQuota {
+			return common.NewMessage("Insufficient balance")
+		}
+		if requiredQuota > 0 {
+			if err := tx.Model(&User{}).Where("id = ?", userId).
+				Update("quota", gorm.Expr("quota - ?", requiredQuota)).Error; err != nil {
+				return err
+			}
+		}
+
+		resetResult, err := resetUserSubscriptionsByPlanTx(tx, userId, plan, now, scope, false)
+		if err != nil {
+			return err
+		}
+
+		order := &SubscriptionOrder{
+			UserId:          userId,
+			PlanId:          plan.Id,
+			Money:           payMoney,
+			Kind:            SubscriptionOrderKindReset,
+			TradeNo:         tradeNo,
+			PaymentMethod:   PaymentMethodBalance,
+			PaymentProvider: PaymentProviderBalance,
+			Status:          common.TopUpStatusSuccess,
+			CreateTime:      now,
+			CompleteTime:    now,
+			ProviderPayload: fmt.Sprintf("charged_quota=%d;reset_count=%d", requiredQuota, resetResult.ResetCount),
+		}
+		if err := tx.Create(order).Error; err != nil {
+			return err
+		}
+
+		logPlanTitle = plan.Title
+		logMoney = payMoney
+		chargedQuota = requiredQuota
+		resetCount = resetResult.ResetCount
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if chargedQuota > 0 {
+		if err := cacheDecrUserQuota(userId, int64(chargedQuota)); err != nil {
+			common.SysLog(common.LogText("failed to decrease user quota cache after subscription balance purchase: %s", err.Error()))
+		}
+	}
+	RecordLog(userId, LogTypeTopup, common.NewMessage("Subscription quota reset with balance, plan: {{plan}}, payment amount: {{amount}}, quota deducted: {{quota}}, reset subscriptions: {{count}}", map[string]any{
+		"plan":   logPlanTitle,
+		"amount": fmt.Sprintf("%.2f", logMoney),
+		"quota":  chargedQuota,
+		"count":  resetCount,
+	}))
+	return nil
+}
+
 // GetAllActiveUserSubscriptions returns all active subscriptions for a user.
 func GetAllActiveUserSubscriptions(userId int) ([]SubscriptionSummary, error) {
 	if userId <= 0 {
@@ -1772,6 +2025,29 @@ func HasActiveUserSubscription(userId int) (bool, error) {
 	var count int64
 	if err := DB.Model(&UserSubscription{}).
 		Where("user_id = ? AND status = ? AND end_time > ?", userId, "active", now).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// HasActiveUserSubscriptionForPlan reports whether the user holds an active,
+// unexpired subscription of the plan. A paid quota reset only makes sense for
+// such a subscription.
+func HasActiveUserSubscriptionForPlan(userId int, planId int) (bool, error) {
+	if userId <= 0 || planId <= 0 {
+		return false, errors.New("invalid userId or planId")
+	}
+	return hasActiveUserSubscriptionForPlanTx(DB, userId, planId, common.GetTimestamp())
+}
+
+func hasActiveUserSubscriptionForPlanTx(db *gorm.DB, userId int, planId int, now int64) (bool, error) {
+	if db == nil {
+		db = DB
+	}
+	var count int64
+	if err := db.Model(&UserSubscription{}).
+		Where("user_id = ? AND plan_id = ? AND status = ? AND end_time > ?", userId, planId, "active", now).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -2237,7 +2513,9 @@ func buildSubscriptionResetResult(plan *SubscriptionPlan, subs []UserSubscriptio
 	return result
 }
 
-func adminResetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, now int64, scope *SubscriptionResetScope, advanceResetTime bool) (*SubscriptionResetResult, error) {
+// resetUserSubscriptionsByPlanTx resets the counters selected by scope for
+// every active subscription the user holds for the plan.
+func resetUserSubscriptionsByPlanTx(tx *gorm.DB, userId int, plan *SubscriptionPlan, now int64, scope *SubscriptionResetScope, advanceResetTime bool) (*SubscriptionResetResult, error) {
 	if tx == nil || plan == nil {
 		return nil, errors.New("invalid reset args")
 	}
@@ -2296,7 +2574,7 @@ func AdminResetUserSubscriptionsByPlan(userId int, planId int, scope *Subscripti
 		if err != nil {
 			return err
 		}
-		result, err = adminResetUserSubscriptionsByPlanTx(tx, userId, plan, now, normalized, advanceResetTime)
+		result, err = resetUserSubscriptionsByPlanTx(tx, userId, plan, now, normalized, advanceResetTime)
 		return err
 	})
 	if err != nil {

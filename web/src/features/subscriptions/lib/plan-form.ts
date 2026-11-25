@@ -37,6 +37,10 @@ export function getPlanFormSchema(t: TFunction) {
     title: z.string().min(1, t("Please enter plan title")),
     subtitle: z.string().optional(),
     price_amount: z.coerce.number().min(0, t("Please enter amount")),
+    // Markup applied to the plan price when the user pays for a quota reset.
+    reset_price_multiplier: z.coerce
+      .number()
+      .min(0, t("Reset price markup cannot be negative")),
     // ISO 4217 code; the plan editor offers PLAN_CURRENCIES, but a plan saved
     // with another code must still round-trip without breaking the form.
     currency: z.string().min(1),
@@ -100,6 +104,7 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   subtitle: "",
   price_amount: 0,
   currency: "USD",
+  reset_price_multiplier: 0,
   duration_unit: "month",
   duration_value: 1,
   custom_seconds: 0,
@@ -150,6 +155,7 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
     subtitle: plan.subtitle || "",
     price_amount: Number(plan.price_amount || 0),
     currency: normalizePlanCurrency(plan.currency),
+    reset_price_multiplier: Number(plan.reset_price_multiplier || 0),
     duration_unit: plan.duration_unit || "month",
     duration_value: Number(plan.duration_value || 1),
     custom_seconds: Number(plan.custom_seconds || 0),
@@ -187,6 +193,7 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
       ...values,
       price_amount: Number(values.price_amount || 0),
       currency: normalizePlanCurrency(values.currency),
+      reset_price_multiplier: Number(values.reset_price_multiplier || 0),
       duration_value: Number(values.duration_value || 0),
       custom_seconds: Number(values.custom_seconds || 0),
       quota_limits: quotaLimits,

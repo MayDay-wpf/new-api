@@ -164,6 +164,34 @@ export async function paySubscriptionBalance(
   return res.data
 }
 
+// ============================================================================
+// User-facing Paid Quota Reset
+// ============================================================================
+
+export async function resetSubscriptionQuotaWithBalance(
+  data: SubscriptionPayRequest
+): Promise<SubscriptionPayResponse> {
+  const res = await api.post('/api/subscription/balance/reset', data)
+  return res.data
+}
+
+export async function resetSubscriptionQuotaEpay(
+  data: SubscriptionPayRequest & { payment_method: string }
+): Promise<SubscriptionPayResponse & { url?: string }> {
+  const res = await api.post('/api/subscription/epay/reset', data)
+  return {
+    ...res.data,
+    url: res.data.url || (res as unknown as { url?: string }).url,
+  }
+}
+
+export async function resetSubscriptionQuotaWaffoPancake(
+  data: SubscriptionPayRequest
+): Promise<SubscriptionPayResponse> {
+  const res = await api.post('/api/subscription/waffo-pancake/reset', data)
+  return res.data
+}
+
 // Mints a Pancake OnetimeProduct (see controller for the OnetimeProduct vs
 // SubscriptionProduct rationale) using persisted creds + StoreID.
 export async function createWaffoPancakeSubscriptionProduct(data: {

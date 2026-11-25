@@ -16,19 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Crown, RefreshCw, Sparkles, Check } from "lucide-react";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
+import { Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import {
   StatusBadge,
   dotColorMap,
   textColorMap,
-} from "@/components/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+} from '@/components/status-badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 import {
   Select,
   SelectContent,
@@ -36,21 +36,21 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { TitledCard } from "@/components/ui/titled-card";
+} from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { TitledCard } from '@/components/ui/titled-card'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from '@/components/ui/tooltip'
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
   updateBillingPreference,
-} from "@/features/subscriptions/api";
-import { SubscriptionPurchaseDialog } from "@/features/subscriptions/components/dialogs/subscription-purchase-dialog";
+} from '@/features/subscriptions/api'
+import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
 import {
   formatDuration,
   formatPlanPrice,
@@ -59,48 +59,48 @@ import {
   getQuotaLimitResetTime,
   getQuotaLimitUsage,
   quotaLimitKey,
-} from "@/features/subscriptions/lib";
+} from '@/features/subscriptions/lib'
 import type {
   PlanRecord,
   UserSubscriptionRecord,
-} from "@/features/subscriptions/types";
-import { formatQuota } from "@/lib/format";
-import { handleServerError } from "@/lib/handle-server-error";
-import { requireServerSuccess } from "@/lib/server-error-message";
-import { cn } from "@/lib/utils";
+} from '@/features/subscriptions/types'
+import { formatQuota } from '@/lib/format'
+import { handleServerError } from '@/lib/handle-server-error'
+import { requireServerSuccess } from '@/lib/server-error-message'
+import { cn } from '@/lib/utils'
 
-import type { PaymentMethod, TopupInfo } from "../types";
+import type { PaymentMethod, TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
-  topupInfo: TopupInfo | null;
-  onAvailabilityChange?: (available: boolean) => void;
-  userQuota?: number;
-  onPurchaseSuccess?: () => void | Promise<void>;
+  topupInfo: TopupInfo | null
+  onAvailabilityChange?: (available: boolean) => void
+  userQuota?: number
+  onPurchaseSuccess?: () => void | Promise<void>
   /** Bump to silently reload plans and subscriptions (e.g. after redemption). */
-  refreshKey?: number;
+  refreshKey?: number
 }
 
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   return payMethods.filter(
-    (m) => m?.type && m.type !== "stripe" && m.type !== "creem",
-  );
+    (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
+  )
 }
 
 function getBillingPreferenceLabel(
   preference: string,
-  t: (key: string) => string,
+  t: (key: string) => string
 ): string {
   switch (preference) {
-    case "subscription_first":
-      return t("Subscription First");
-    case "wallet_first":
-      return t("Wallet First");
-    case "subscription_only":
-      return t("Subscription Only");
-    case "wallet_only":
-      return t("Wallet Only");
+    case 'subscription_first':
+      return t('Subscription First')
+    case 'wallet_first':
+      return t('Wallet First')
+    case 'subscription_only':
+      return t('Subscription Only')
+    case 'wallet_only':
+      return t('Wallet Only')
     default:
-      return preference;
+      return preference
   }
 }
 
@@ -111,303 +111,315 @@ export function SubscriptionPlansCard({
   onPurchaseSuccess,
   refreshKey,
 }: SubscriptionPlansCardProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
-  const [plans, setPlans] = useState<PlanRecord[]>([]);
+  const [plans, setPlans] = useState<PlanRecord[]>([])
   const [activeSubscriptions, setActiveSubscriptions] = useState<
     UserSubscriptionRecord[]
-  >([]);
+  >([])
   const [allSubscriptions, setAllSubscriptions] = useState<
     UserSubscriptionRecord[]
-  >([]);
+  >([])
   const [billingPreference, setBillingPreference] =
-    useState("subscription_first");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+    useState('subscription_first')
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const [purchaseOpen, setPurchaseOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null);
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
+  const [dialogMode, setDialogMode] = useState<'purchase' | 'reset'>('purchase')
 
-  const enableStripe = !!topupInfo?.enable_stripe_topup;
-  const enableCreem = !!topupInfo?.enable_creem_topup;
-  const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup;
-  const enableOnlineTopUp = !!topupInfo?.enable_online_topup;
+  const enableStripe = !!topupInfo?.enable_stripe_topup
+  const enableCreem = !!topupInfo?.enable_creem_topup
+  const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup
+  const enableOnlineTopUp = !!topupInfo?.enable_online_topup
   const epayMethods = useMemo(
     () => getEpayMethods(topupInfo?.pay_methods),
-    [topupInfo?.pay_methods],
-  );
+    [topupInfo?.pay_methods]
+  )
 
   const fetchPlans = useCallback(async () => {
     try {
-      const res = requireServerSuccess(await getPublicPlans());
+      const res = requireServerSuccess(await getPublicPlans())
       if (res.success) {
-        setPlans(res.data || []);
+        setPlans(res.data || [])
       }
     } catch (error) {
-      handleServerError(error);
-      setPlans([]);
+      handleServerError(error)
+      setPlans([])
     }
-  }, []);
+  }, [])
 
   const fetchSelfSubscription = useCallback(async () => {
     try {
-      const res = requireServerSuccess(await getSelfSubscriptionFull());
+      const res = requireServerSuccess(await getSelfSubscriptionFull())
       if (res.success && res.data) {
         setBillingPreference(
-          res.data.billing_preference || "subscription_first",
-        );
-        setActiveSubscriptions(res.data.subscriptions || []);
-        setAllSubscriptions(res.data.all_subscriptions || []);
+          res.data.billing_preference || 'subscription_first'
+        )
+        setActiveSubscriptions(res.data.subscriptions || [])
+        setAllSubscriptions(res.data.all_subscriptions || [])
       }
     } catch (error) {
-      handleServerError(error);
+      handleServerError(error)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
     const init = async () => {
-      setLoading(true);
-      await Promise.all([fetchPlans(), fetchSelfSubscription()]);
-      setLoading(false);
-    };
-    init();
-  }, [fetchPlans, fetchSelfSubscription]);
+      setLoading(true)
+      await Promise.all([fetchPlans(), fetchSelfSubscription()])
+      setLoading(false)
+    }
+    init()
+  }, [fetchPlans, fetchSelfSubscription])
 
   // Silent reload after an external change (e.g. redeeming a subscription
   // code): no skeleton, just refresh the plans and the current subscriptions.
-  const appliedRefreshKeyRef = useRef(refreshKey);
+  const appliedRefreshKeyRef = useRef(refreshKey)
   useEffect(() => {
-    if (appliedRefreshKeyRef.current === refreshKey) return;
-    appliedRefreshKeyRef.current = refreshKey;
-    if (!refreshKey) return;
-    void Promise.all([fetchPlans(), fetchSelfSubscription()]);
-  }, [refreshKey, fetchPlans, fetchSelfSubscription]);
+    if (appliedRefreshKeyRef.current === refreshKey) return
+    appliedRefreshKeyRef.current = refreshKey
+    if (!refreshKey) return
+    void Promise.all([fetchPlans(), fetchSelfSubscription()])
+  }, [refreshKey, fetchPlans, fetchSelfSubscription])
 
   const handleRefresh = async () => {
-    setRefreshing(true);
+    setRefreshing(true)
     try {
-      await fetchSelfSubscription();
+      await fetchSelfSubscription()
     } finally {
-      setRefreshing(false);
+      setRefreshing(false)
     }
-  };
+  }
 
   const handlePreferenceChange = async (pref: string) => {
-    const previous = billingPreference;
-    setBillingPreference(pref);
+    const previous = billingPreference
+    setBillingPreference(pref)
     try {
-      const res = await updateBillingPreference(pref);
+      const res = await updateBillingPreference(pref)
       if (res.success) {
-        toast.success(t("Updated successfully"));
-        const normalized = res.data?.billing_preference || pref;
-        setBillingPreference(normalized);
+        toast.success(t('Updated successfully'))
+        const normalized = res.data?.billing_preference || pref
+        setBillingPreference(normalized)
       } else {
-        handleServerError(res, t("Update failed"));
-        setBillingPreference(previous);
+        handleServerError(res, t('Update failed'))
+        setBillingPreference(previous)
       }
     } catch (error) {
-      handleServerError(error, t("Request failed"));
-      setBillingPreference(previous);
+      handleServerError(error, t('Request failed'))
+      setBillingPreference(previous)
     }
-  };
+  }
 
-  const hasActive = activeSubscriptions.length > 0;
-  const hasAny = allSubscriptions.length > 0;
-  const isAvailable = loading || plans.length > 0 || hasAny;
-  const disablePref = !hasActive;
+  const hasActive = activeSubscriptions.length > 0
+  const hasAny = allSubscriptions.length > 0
+  const isAvailable = loading || plans.length > 0 || hasAny
+  const disablePref = !hasActive
   const isSubPref =
-    billingPreference === "subscription_first" ||
-    billingPreference === "subscription_only";
+    billingPreference === 'subscription_first' ||
+    billingPreference === 'subscription_only'
 
   // A user may hold only one active subscription at a time. While it runs, only
   // that plan can be renewed; every other plan stays locked until it ends or an
   // administrator switches the subscription.
   const activePlanIdSet = useMemo(() => {
-    const ids = new Set<number>();
-    const now = Date.now() / 1000;
+    const ids = new Set<number>()
+    const now = Date.now() / 1000
     for (const sub of activeSubscriptions) {
-      const subscription = sub?.subscription;
-      if (!subscription?.plan_id) continue;
+      const subscription = sub?.subscription
+      if (!subscription?.plan_id) continue
       if (
-        subscription.status !== "active" ||
+        subscription.status !== 'active' ||
         (subscription.end_time || 0) <= now
       ) {
-        continue;
+        continue
       }
-      ids.add(subscription.plan_id);
+      ids.add(subscription.plan_id)
     }
-    return ids;
-  }, [activeSubscriptions]);
+    return ids
+  }, [activeSubscriptions])
 
   const planPurchaseCountMap = useMemo(() => {
-    const map = new Map<number, number>();
-    const now = Date.now() / 1000;
+    const map = new Map<number, number>()
+    const now = Date.now() / 1000
     for (const sub of allSubscriptions) {
-      const subscription = sub?.subscription;
-      const planId = subscription?.plan_id;
-      if (!planId) continue;
+      const subscription = sub?.subscription
+      const planId = subscription?.plan_id
+      if (!planId) continue
       // Only active, unexpired subscriptions occupy a purchase-limit slot;
       // expired or cancelled ones must not block a new purchase.
       if (
-        subscription?.status !== "active" ||
+        subscription?.status !== 'active' ||
         (subscription?.end_time || 0) <= now
       ) {
-        continue;
+        continue
       }
-      map.set(planId, (map.get(planId) || 0) + 1);
+      map.set(planId, (map.get(planId) || 0) + 1)
     }
-    return map;
-  }, [allSubscriptions]);
+    return map
+  }, [allSubscriptions])
 
   useEffect(() => {
-    onAvailabilityChange?.(isAvailable);
-  }, [isAvailable, onAvailabilityChange]);
+    onAvailabilityChange?.(isAvailable)
+  }, [isAvailable, onAvailabilityChange])
 
   const planTitleMap = useMemo(() => {
-    const map = new Map<number, string>();
+    const map = new Map<number, string>()
     for (const p of plans) {
       if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan.title || "");
+        map.set(p.plan.id, p.plan.title || '')
       }
     }
-    return map;
-  }, [plans]);
+    return map
+  }, [plans])
 
   const planMap = useMemo(() => {
-    const map = new Map<number, PlanRecord["plan"]>();
+    const map = new Map<number, PlanRecord['plan']>()
     for (const p of plans) {
       if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan);
+        map.set(p.plan.id, p.plan)
       }
     }
-    return map;
-  }, [plans]);
+    return map
+  }, [plans])
 
   // Opens the purchase dialog for the subscription's plan; the backend turns it
   // into a renewal of that subscription (no extra stock slot).
   const startRenew = (planId?: number) => {
-    if (!planId) return;
-    const record = plans.find((item) => item?.plan?.id === planId);
-    if (!record) return;
-    setSelectedPlan(record);
-    setPurchaseOpen(true);
-  };
+    if (!planId) return
+    const record = plans.find((item) => item?.plan?.id === planId)
+    if (!record) return
+    setSelectedPlan(record)
+    setDialogMode('purchase')
+    setPurchaseOpen(true)
+  }
+
+  // Opens the paid reset checkout for the subscription's plan.
+  const startReset = (planId?: number) => {
+    if (!planId) return
+    const record = plans.find((item) => item?.plan?.id === planId)
+    if (!record) return
+    setSelectedPlan(record)
+    setDialogMode('reset')
+    setPurchaseOpen(true)
+  }
 
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
-    const endTime = sub?.subscription?.end_time || 0;
-    if (!endTime) return 0;
-    const now = Date.now() / 1000;
-    return Math.max(0, Math.ceil((endTime - now) / 86400));
-  };
+    const endTime = sub?.subscription?.end_time || 0
+    if (!endTime) return 0
+    const now = Date.now() / 1000
+    return Math.max(0, Math.ceil((endTime - now) / 86400))
+  }
 
   const getUsagePercent = (sub: UserSubscriptionRecord) => {
-    const total = Number(sub?.subscription?.amount_total || 0);
-    const used = Number(sub?.subscription?.amount_used || 0);
-    if (total <= 0) return 0;
-    return Math.round((used / total) * 100);
-  };
+    const total = Number(sub?.subscription?.amount_total || 0)
+    const used = Number(sub?.subscription?.amount_used || 0)
+    if (total <= 0) return 0
+    return Math.round((used / total) * 100)
+  }
 
   if (loading) {
     return (
-      <Card data-card-hover="false" className="gap-0 overflow-hidden py-0">
-        <CardHeader className="border-b p-3 !pb-3 sm:p-5 sm:!pb-5">
-          <Skeleton className="h-6 w-32" />
+      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
+        <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
+          <Skeleton className='h-6 w-32' />
         </CardHeader>
-        <CardContent className="space-y-4 p-3 sm:p-5">
-          <Skeleton className="h-20 w-full" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {["first", "second", "third"].map((key) => (
-              <Skeleton key={key} className="h-48 w-full" />
+        <CardContent className='space-y-4 p-3 sm:p-5'>
+          <Skeleton className='h-20 w-full' />
+          <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
+            {['first', 'second', 'third'].map((key) => (
+              <Skeleton key={key} className='h-48 w-full' />
             ))}
           </div>
         </CardContent>
       </Card>
-    );
+    )
   }
 
   if (plans.length === 0 && !hasAny) {
-    return null;
+    return null
   }
 
   return (
     <>
       <TitledCard
-        title={t("Subscription Plans")}
-        description={t("Subscribe to a plan for model access")}
-        icon={<Crown className="h-4 w-4" />}
-        iconTone="warning"
+        title={t('Subscription Plans')}
+        description={t('Subscribe to a plan for model access')}
+        icon={<Crown className='h-4 w-4' />}
+        iconTone='warning'
         disableHoverEffect
-        contentClassName="space-y-4 sm:space-y-5"
+        contentClassName='space-y-4 sm:space-y-5'
       >
         {/* My subscriptions & billing preference */}
-        <div className="rounded-xl border p-3 sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="text-sm font-medium">
-                {t("My Subscriptions")}
+        <div className='rounded-xl border p-3 sm:p-4'>
+          <div className='flex flex-wrap items-center justify-between gap-2.5 sm:gap-3'>
+            <div className='flex min-w-0 flex-wrap items-center gap-2'>
+              <span className='text-sm font-medium'>
+                {t('My Subscriptions')}
               </span>
-              <span className="flex items-center gap-1.5 text-xs font-medium">
+              <span className='flex items-center gap-1.5 text-xs font-medium'>
                 <span
                   className={cn(
-                    "size-1.5 shrink-0 rounded-full",
-                    hasActive ? dotColorMap.success : dotColorMap.neutral,
+                    'size-1.5 shrink-0 rounded-full',
+                    hasActive ? dotColorMap.success : dotColorMap.neutral
                   )}
-                  aria-hidden="true"
+                  aria-hidden='true'
                 />
                 {hasActive ? (
                   <span className={cn(textColorMap.success)}>
-                    {activeSubscriptions.length} {t("active")}
+                    {activeSubscriptions.length} {t('active')}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground">
-                    {t("No Active")}
+                  <span className='text-muted-foreground'>
+                    {t('No Active')}
                   </span>
                 )}
                 {allSubscriptions.length > activeSubscriptions.length && (
                   <>
-                    <span className="text-muted-foreground/30">·</span>
-                    <span className="text-muted-foreground">
-                      {allSubscriptions.length - activeSubscriptions.length}{" "}
-                      {t("expired")}
+                    <span className='text-muted-foreground/30'>·</span>
+                    <span className='text-muted-foreground'>
+                      {allSubscriptions.length - activeSubscriptions.length}{' '}
+                      {t('expired')}
                     </span>
                   </>
                 )}
               </span>
             </div>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className='flex w-full items-center gap-2 sm:w-auto'>
               <Select
                 items={[
                   {
-                    value: "subscription_first",
+                    value: 'subscription_first',
                     label: (
                       <>
-                        {getBillingPreferenceLabel("subscription_first", t)}
-                        {disablePref ? ` (${t("No Active")})` : ""}
+                        {getBillingPreferenceLabel('subscription_first', t)}
+                        {disablePref ? ` (${t('No Active')})` : ''}
                       </>
                     ),
                   },
                   {
-                    value: "wallet_first",
-                    label: getBillingPreferenceLabel("wallet_first", t),
+                    value: 'wallet_first',
+                    label: getBillingPreferenceLabel('wallet_first', t),
                   },
                   {
-                    value: "subscription_only",
+                    value: 'subscription_only',
                     label: (
                       <>
-                        {getBillingPreferenceLabel("subscription_only", t)}
-                        {disablePref ? ` (${t("No Active")})` : ""}
+                        {getBillingPreferenceLabel('subscription_only', t)}
+                        {disablePref ? ` (${t('No Active')})` : ''}
                       </>
                     ),
                   },
                   {
-                    value: "wallet_only",
-                    label: getBillingPreferenceLabel("wallet_only", t),
+                    value: 'wallet_only',
+                    label: getBillingPreferenceLabel('wallet_only', t),
                   },
                 ]}
                 value={billingPreference}
                 onValueChange={(v) => v !== null && handlePreferenceChange(v)}
               >
-                <SelectTrigger className="h-8 flex-1 text-xs sm:w-[140px] sm:flex-none">
+                <SelectTrigger className='h-8 flex-1 text-xs sm:w-[140px] sm:flex-none'>
                   <SelectValue>
                     {getBillingPreferenceLabel(billingPreference, t)}
                   </SelectValue>
@@ -415,218 +427,239 @@ export function SubscriptionPlansCard({
                 <SelectContent alignItemWithTrigger={false}>
                   <SelectGroup>
                     <SelectItem
-                      value="subscription_first"
+                      value='subscription_first'
                       disabled={disablePref}
                     >
-                      {getBillingPreferenceLabel("subscription_first", t)}
-                      {disablePref ? ` (${t("No Active")})` : ""}
+                      {getBillingPreferenceLabel('subscription_first', t)}
+                      {disablePref ? ` (${t('No Active')})` : ''}
                     </SelectItem>
-                    <SelectItem value="wallet_first">
-                      {getBillingPreferenceLabel("wallet_first", t)}
+                    <SelectItem value='wallet_first'>
+                      {getBillingPreferenceLabel('wallet_first', t)}
                     </SelectItem>
                     <SelectItem
-                      value="subscription_only"
+                      value='subscription_only'
                       disabled={disablePref}
                     >
-                      {getBillingPreferenceLabel("subscription_only", t)}
-                      {disablePref ? ` (${t("No Active")})` : ""}
+                      {getBillingPreferenceLabel('subscription_only', t)}
+                      {disablePref ? ` (${t('No Active')})` : ''}
                     </SelectItem>
-                    <SelectItem value="wallet_only">
-                      {getBillingPreferenceLabel("wallet_only", t)}
+                    <SelectItem value='wallet_only'>
+                      {getBillingPreferenceLabel('wallet_only', t)}
                     </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
               <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
+                variant='ghost'
+                size='icon'
+                className='h-8 w-8'
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
                 <RefreshCw
-                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                  className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
                 />
               </Button>
             </div>
           </div>
 
           {disablePref && isSubPref && (
-            <p className="text-muted-foreground mt-2 text-xs">
-              {billingPreference === "subscription_only"
+            <p className='text-muted-foreground mt-2 text-xs'>
+              {billingPreference === 'subscription_only'
                 ? t(
-                    "Preference saved as {{pref}}, but no active subscription. Requests will be rejected.",
-                    { pref: t("Subscription Only") },
+                    'Preference saved as {{pref}}, but no active subscription. Requests will be rejected.',
+                    { pref: t('Subscription Only') }
                   )
                 : t(
-                    "Preference saved as {{pref}}, but no active subscription. Wallet will be used automatically.",
-                    { pref: t("Subscription First") },
+                    'Preference saved as {{pref}}, but no active subscription. Wallet will be used automatically.',
+                    { pref: t('Subscription First') }
                   )}
             </p>
           )}
 
           {hasAny && (
             <>
-              <Separator className="my-3" />
-              <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+              <Separator className='my-3' />
+              <div className='max-h-64 space-y-3 overflow-y-auto pr-1'>
                 {allSubscriptions.map((sub) => {
-                  const subscription = sub.subscription;
-                  const totalAmount = Number(subscription?.amount_total || 0);
-                  const usedAmount = Number(subscription?.amount_used || 0);
+                  const subscription = sub.subscription
+                  const totalAmount = Number(subscription?.amount_total || 0)
+                  const usedAmount = Number(subscription?.amount_used || 0)
                   const remainAmount =
-                    totalAmount > 0 ? Math.max(0, totalAmount - usedAmount) : 0;
+                    totalAmount > 0 ? Math.max(0, totalAmount - usedAmount) : 0
                   const planTitle =
-                    planTitleMap.get(subscription?.plan_id) || "";
-                  const remainDays = getRemainingDays(sub);
-                  const usagePercent = getUsagePercent(sub);
-                  const now = Date.now() / 1000;
-                  const isExpired = (subscription?.end_time || 0) < now;
-                  const isCancelled = subscription?.status === "cancelled";
+                    planTitleMap.get(subscription?.plan_id) || ''
+                  const remainDays = getRemainingDays(sub)
+                  const usagePercent = getUsagePercent(sub)
+                  const now = Date.now() / 1000
+                  const isExpired = (subscription?.end_time || 0) < now
+                  const isCancelled = subscription?.status === 'cancelled'
                   const isActive =
-                    subscription?.status === "active" && !isExpired;
-                  const nextResetTime = subscription?.next_reset_time ?? 0;
-                  const planQuotaLimits =
-                    planMap.get(subscription?.plan_id || 0)?.quota_limits || [];
+                    subscription?.status === 'active' && !isExpired
+                  const nextResetTime = subscription?.next_reset_time ?? 0
+                  const subscriptionPlan = planMap.get(
+                    subscription?.plan_id || 0
+                  )
+                  const planQuotaLimits = subscriptionPlan?.quota_limits || []
+                  // A paid reset is offered only for explicitly configured quota
+                  // windows; the legacy single reset cycle is not a resettable quota.
+                  const supportsPaidReset =
+                    !!subscriptionPlan && planQuotaLimits.length > 0
                   let statusBadge = (
                     <StatusBadge
-                      label={t("Expired")}
-                      variant="neutral"
+                      label={t('Expired')}
+                      variant='neutral'
                       copyable={false}
                     />
-                  );
+                  )
                   if (isActive) {
                     statusBadge = (
                       <StatusBadge
-                        label={t("Active")}
-                        variant="success"
+                        label={t('Active')}
+                        variant='success'
                         copyable={false}
                       />
-                    );
+                    )
                   } else if (isCancelled) {
                     statusBadge = (
                       <StatusBadge
-                        label={t("Cancelled")}
-                        variant="neutral"
+                        label={t('Cancelled')}
+                        variant='neutral'
                         copyable={false}
                       />
-                    );
+                    )
                   }
 
-                  let endTimeLabel = t("Expired at");
+                  let endTimeLabel = t('Expired at')
                   if (isActive) {
-                    endTimeLabel = t("Until");
+                    endTimeLabel = t('Until')
                   } else if (isCancelled) {
-                    endTimeLabel = t("Cancelled at");
+                    endTimeLabel = t('Cancelled at')
                   }
 
                   return (
                     <div
                       key={subscription?.id}
-                      className="bg-background rounded-md border p-3 text-xs"
+                      className='bg-background rounded-md border p-3 text-xs'
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">
+                      <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <span className='font-medium'>
                             {planTitle
-                              ? `${planTitle} · ${t("Subscription")} #${subscription?.id}`
-                              : `${t("Subscription")} #${subscription?.id}`}
+                              ? `${planTitle} · ${t('Subscription')} #${subscription?.id}`
+                              : `${t('Subscription')} #${subscription?.id}`}
                           </span>
                           {statusBadge}
-                          {isActive && planMap.has(subscription?.plan_id || 0) && (
-                            <Button
-                              size="sm"
-                              className="font-semibold shadow-sm"
-                              onClick={() => startRenew(subscription?.plan_id)}
-                            >
-                              {t("Renew Now")}
-                            </Button>
+                          {isActive && subscriptionPlan && (
+                            <div className='flex flex-wrap items-center gap-2'>
+                              <Button
+                                size='sm'
+                                className='font-semibold shadow-sm'
+                                onClick={() =>
+                                  startRenew(subscription?.plan_id)
+                                }
+                              >
+                                {t('Renew Now')}
+                              </Button>
+                              {supportsPaidReset && (
+                                <Button
+                                  size='sm'
+                                  variant='default'
+                                  onClick={() =>
+                                    startReset(subscription?.plan_id)
+                                  }
+                                >
+                                  {t('Reset Now')}
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </div>
                         {isActive && (
-                          <span className="text-muted-foreground">
-                            {t("{{count}} days remaining", {
+                          <span className='text-muted-foreground'>
+                            {t('{{count}} days remaining', {
                               count: remainDays,
                             })}
                           </span>
                         )}
                       </div>
-                      <div className="text-muted-foreground mt-1.5">
-                        {endTimeLabel}{" "}
+                      <div className='text-muted-foreground mt-1.5'>
+                        {endTimeLabel}{' '}
                         {new Date(
-                          (subscription?.end_time || 0) * 1000,
+                          (subscription?.end_time || 0) * 1000
                         ).toLocaleString()}
                       </div>
                       {isActive &&
                         planQuotaLimits.length === 0 &&
                         nextResetTime > 0 && (
-                          <div className="text-muted-foreground mt-1">
-                            {t("Next reset")}:{" "}
+                          <div className='text-muted-foreground mt-1'>
+                            {t('Next reset')}:{' '}
                             {new Date(nextResetTime * 1000).toLocaleString()}
                           </div>
                         )}
                       {planQuotaLimits.length === 0 && (
                         <>
-                          <div className="text-muted-foreground mt-1">
-                            {t("Total Quota")}:{" "}
+                          <div className='text-muted-foreground mt-1'>
+                            {t('Total Quota')}:{' '}
                             {totalAmount > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger
-                                  render={<span className="cursor-help" />}
+                                  render={<span className='cursor-help' />}
                                 >
                                   {formatQuota(usedAmount)}/
-                                  {formatQuota(totalAmount)} · {t("Remaining")}{" "}
+                                  {formatQuota(totalAmount)} · {t('Remaining')}{' '}
                                   {formatQuota(remainAmount)}
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  {t("Raw Quota")}: {usedAmount}/{totalAmount} ·{" "}
-                                  {t("Remaining")} {remainAmount}
+                                  {t('Raw Quota')}: {usedAmount}/{totalAmount} ·{' '}
+                                  {t('Remaining')} {remainAmount}
                                 </TooltipContent>
                               </Tooltip>
                             ) : (
-                              t("Unlimited")
+                              t('Unlimited')
                             )}
                             {totalAmount > 0 && (
-                              <span className="ml-2">
-                                {t("Used")} {usagePercent}%
+                              <span className='ml-2'>
+                                {t('Used')} {usagePercent}%
                               </span>
                             )}
                           </div>
                           {totalAmount > 0 && isActive && (
                             <Progress
                               value={usagePercent}
-                              className="mt-2 h-1.5"
+                              className='mt-2 h-1.5'
                             />
                           )}
                         </>
                       )}
                       {isActive && planQuotaLimits.length > 0 && (
-                        <div className="mt-2 space-y-1.5">
+                        <div className='mt-2 space-y-1.5'>
                           {planQuotaLimits.map((limit) => {
-                            const limitAmount = Number(limit.amount || 0);
+                            const limitAmount = Number(limit.amount || 0)
                             const limitUsed = getQuotaLimitUsage(
                               limit,
                               subscription?.quota_limit_usage,
-                              now,
-                            );
+                              now
+                            )
                             const limitResetTime = getQuotaLimitResetTime(
                               limit,
                               subscription?.quota_limit_usage,
-                              now,
-                            );
+                              now
+                            )
                             const limitPercent =
                               limitAmount > 0
                                 ? Math.min(
                                     100,
-                                    Math.round((limitUsed / limitAmount) * 100),
+                                    Math.round((limitUsed / limitAmount) * 100)
                                   )
-                                : 0;
+                                : 0
                             const limitRemainingPercent = Math.max(
                               0,
-                              100 - limitPercent,
-                            );
+                              100 - limitPercent
+                            )
                             return (
                               <div key={quotaLimitKey(limit)}>
-                                <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
+                                <div className='text-muted-foreground flex items-center justify-between gap-2 text-xs'>
                                   <span>
                                     {formatQuotaLimitWindow(limit, t)}
                                   </span>
@@ -634,204 +667,213 @@ export function SubscriptionPlansCard({
                                     {formatQuota(limitUsed)}/
                                     {limitAmount > 0
                                       ? formatQuota(limitAmount)
-                                      : t("Unlimited")}
+                                      : t('Unlimited')}
                                     {limitAmount > 0 && (
-                                      <span className="ml-2">
-                                        {t("Remaining")}{" "}
-                                        {limitRemainingPercent}%
+                                      <span className='ml-2'>
+                                        {t('Remaining')} {limitRemainingPercent}
+                                        %
                                       </span>
                                     )}
                                   </span>
                                 </div>
                                 {limitResetTime > 0 && (
-                                  <div className="text-muted-foreground text-[11px] opacity-80">
-                                    {t("Next reset")}:{" "}
+                                  <div className='text-muted-foreground text-[11px] opacity-80'>
+                                    {t('Next reset')}:{' '}
                                     {new Date(
-                                      limitResetTime * 1000,
+                                      limitResetTime * 1000
                                     ).toLocaleString()}
                                   </div>
                                 )}
                                 {limitAmount > 0 && (
                                   <Progress
                                     value={limitPercent}
-                                    className="mt-1 h-1"
+                                    className='mt-1 h-1'
                                   />
                                 )}
                               </div>
-                            );
+                            )
                           })}
                         </div>
                       )}
                     </div>
-                  );
+                  )
                 })}
               </div>
             </>
           )}
 
           {!hasAny && (
-            <p className="text-muted-foreground mt-2 text-xs">
-              {t("Subscribe to a plan for model access")}
+            <p className='text-muted-foreground mt-2 text-xs'>
+              {t('Subscribe to a plan for model access')}
             </p>
           )}
         </div>
 
         {/* Available plans grid */}
         {plans.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2 2xl:gap-4">
+          <div className='grid grid-cols-1 gap-3 2xl:grid-cols-2 2xl:gap-4'>
             {plans.map((p, index) => {
-              const plan = p?.plan;
-              if (!plan) return null;
-              const totalAmount = Number(plan.total_amount || 0);
-              const price = formatPlanPrice(
-                plan.price_amount,
-                plan.currency,
-              );
-              const isPopular = index === 0 && plans.length > 1;
-              const limit = Number(plan.max_purchase_per_user || 0);
-              const count = planPurchaseCountMap.get(plan.id) || 0;
+              const plan = p?.plan
+              if (!plan) return null
+              const totalAmount = Number(plan.total_amount || 0)
+              const price = formatPlanPrice(plan.price_amount, plan.currency)
+              const isPopular = index === 0 && plans.length > 1
+              const limit = Number(plan.max_purchase_per_user || 0)
+              const count = planPurchaseCountMap.get(plan.id) || 0
               // Holding an active subscription of this plan turns the purchase into
               // a renewal: it prolongs the existing subscription and takes no stock
               // slot, so neither sold-out stock nor the purchase limit blocks it.
-              const isRenewal = count > 0;
+              const isRenewal = count > 0
               // Only the running plan may be renewed. Any other plan is locked
               // while a subscription is active; switching requires an
               // administrator.
               const blockedByActiveSubscription =
-                !isRenewal && activePlanIdSet.size > 0;
-              const reached = !isRenewal && limit > 0 && count >= limit;
-              const stockTotal = Number(plan.stock_total || 0);
+                !isRenewal && activePlanIdSet.size > 0
+              const reached = !isRenewal && limit > 0 && count >= limit
+              const stockTotal = Number(plan.stock_total || 0)
               const stockRemaining = Math.max(
                 stockTotal - Number(plan.stock_sold || 0),
-                0,
-              );
-              const soldOut = stockTotal > 0 && stockRemaining <= 0;
+                0
+              )
+              const soldOut = stockTotal > 0 && stockRemaining <= 0
+              let purchaseState = 'available'
+              if (blockedByActiveSubscription) {
+                purchaseState = 'blocked'
+              } else if (soldOut && !isRenewal) {
+                purchaseState = 'sold-out'
+              } else if (reached) {
+                purchaseState = 'limited'
+              }
 
-              const planQuotaLimits = plan.quota_limits || [];
+              const planQuotaLimits = plan.quota_limits || []
               const benefits = [
-                `${t("Validity Period")}: ${formatDuration(plan, t)}`,
+                `${t('Validity Period')}: ${formatDuration(plan, t)}`,
                 ...planQuotaLimits.map(
                   (quotaLimit) =>
-                    `${t("Quota Limit")}: ${formatQuotaLimitWindow(quotaLimit, t)} · ${
+                    `${t('Quota Limit')}: ${formatQuotaLimitWindow(quotaLimit, t)} · ${
                       Number(quotaLimit.amount || 0) > 0
                         ? formatQuota(Number(quotaLimit.amount || 0))
-                        : t("Unlimited")
-                    }`,
+                        : t('Unlimited')
+                    }`
                 ),
                 planQuotaLimits.length === 0 &&
-                formatResetPeriod(plan, t) !== t("No Reset")
-                  ? `${t("Quota Reset")}: ${formatResetPeriod(plan, t)}`
+                formatResetPeriod(plan, t) !== t('No Reset')
+                  ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
                   : null,
                 totalAmount > 0
-                  ? `${t("Total Quota")}: ${formatQuota(totalAmount)}`
-                  : `${t("Total Quota")}: ${t("Unlimited")}`,
-                limit > 0 ? `${t("Purchase Limit")}: ${limit}` : null,
+                  ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
+                  : `${t('Total Quota')}: ${t('Unlimited')}`,
+                limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
                 stockTotal > 0
-                  ? `${t("Remaining Stock")}: ${stockRemaining}/${stockTotal}`
+                  ? `${t('Remaining Stock')}: ${stockRemaining}/${stockTotal}`
                   : null,
                 plan.upgrade_group
-                  ? `${t("Upgrade Group")}: ${plan.upgrade_group}`
+                  ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
                   : null,
-              ].filter(Boolean) as string[];
+              ].filter(Boolean) as string[]
 
               return (
                 <Card
                   key={plan.id}
-                  data-card-hover="false"
-                  className={cn(isPopular && "border-primary/70 shadow-sm")}
+                  data-card-hover='false'
+                  className={cn(isPopular && 'border-primary/70 shadow-sm')}
                 >
-                  <CardContent className="flex h-full flex-col p-3.5 sm:p-4">
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="truncate font-semibold">
-                          {plan.title || t("Subscription Plans")}
+                  <CardContent className='flex h-full flex-col p-3.5 sm:p-4'>
+                    <div className='mb-2 flex items-start justify-between gap-3'>
+                      <div className='min-w-0'>
+                        <h4 className='truncate font-semibold'>
+                          {plan.title || t('Subscription Plans')}
                         </h4>
                         {plan.subtitle && (
-                          <p className="text-muted-foreground truncate text-xs">
+                          <p className='text-muted-foreground truncate text-xs'>
                             {plan.subtitle}
                           </p>
                         )}
                       </div>
                       {isPopular && (
                         <StatusBadge
-                          variant="info"
+                          variant='info'
                           copyable={false}
-                          className="shrink-0"
+                          className='shrink-0'
                         >
-                          <Sparkles className="h-3 w-3" />
-                          {t("Recommended")}
+                          <Sparkles className='h-3 w-3' />
+                          {t('Recommended')}
                         </StatusBadge>
                       )}
                     </div>
 
-                    <div className="py-2">
-                      <span className="text-primary text-2xl font-bold">
+                    <div className='py-2'>
+                      <span className='text-primary text-2xl font-bold'>
                         {price}
                       </span>
                     </div>
 
-                    <div className="flex-1 space-y-1.5 pb-3">
+                    <div className='flex-1 space-y-1.5 pb-3'>
                       {benefits.map((label) => (
                         <div
                           key={label}
-                          className="text-muted-foreground flex items-center gap-2 text-xs"
+                          className='text-muted-foreground flex items-center gap-2 text-xs'
                         >
-                          <Check className="text-primary h-3 w-3 shrink-0" />
+                          <Check className='text-primary h-3 w-3 shrink-0' />
                           <span>{label}</span>
                         </div>
                       ))}
                     </div>
 
-                    <Separator className="mb-3" />
+                    <Separator className='mb-3' />
 
-                    {blockedByActiveSubscription ? (
+                    {purchaseState === 'blocked' && (
                       <Tooltip>
                         <TooltipTrigger render={<div />}>
-                          <Button variant="outline" className="w-full" disabled>
-                            {t("Switch via Admin")}
+                          <Button variant='outline' className='w-full' disabled>
+                            {t('Switch via Admin')}
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
                           {t(
-                            "You already have an active subscription. Only renewal or switching via the administrator is allowed.",
+                            'You already have an active subscription. Only renewal or switching via the administrator is allowed.'
                           )}
                         </TooltipContent>
                       </Tooltip>
-                    ) : soldOut && !isRenewal ? (
-                      <Button variant="outline" className="w-full" disabled>
-                        {t("Sold Out")}
+                    )}
+                    {purchaseState === 'sold-out' && (
+                      <Button variant='outline' className='w-full' disabled>
+                        {t('Sold Out')}
                       </Button>
-                    ) : reached ? (
+                    )}
+                    {purchaseState === 'limited' && (
                       <Tooltip>
                         <TooltipTrigger render={<div />}>
-                          <Button variant="outline" className="w-full" disabled>
-                            {t("Limit Reached")}
+                          <Button variant='outline' className='w-full' disabled>
+                            {t('Limit Reached')}
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          {t("Purchase limit reached")} ({count}/{limit})
+                          {t('Purchase limit reached')} ({count}/{limit})
                         </TooltipContent>
                       </Tooltip>
-                    ) : (
+                    )}
+                    {purchaseState === 'available' && (
                       <Button
-                        variant="outline"
-                        className="w-full"
+                        variant='outline'
+                        className='w-full'
                         onClick={() => {
-                          setSelectedPlan(p);
-                          setPurchaseOpen(true);
+                          setSelectedPlan(p)
+                          setDialogMode('purchase')
+                          setPurchaseOpen(true)
                         }}
                       >
-                        {isRenewal ? t("Renew") : t("Subscribe Now")}
+                        {isRenewal ? t('Renew') : t('Subscribe Now')}
                       </Button>
                     )}
                   </CardContent>
                 </Card>
-              );
+              )
             })}
           </div>
         ) : (
-          <p className="text-muted-foreground py-4 text-center text-sm">
-            {t("No plans available")}
+          <p className='text-muted-foreground py-4 text-center text-sm'>
+            {t('No plans available')}
           </p>
         )}
       </TitledCard>
@@ -839,12 +881,13 @@ export function SubscriptionPlansCard({
       <SubscriptionPurchaseDialog
         open={purchaseOpen}
         onOpenChange={(open) => {
-          setPurchaseOpen(open);
+          setPurchaseOpen(open)
           if (!open) {
-            fetchSelfSubscription();
+            fetchSelfSubscription()
           }
         }}
         plan={selectedPlan}
+        mode={dialogMode}
         enableStripe={enableStripe}
         enableCreem={enableCreem}
         enableWaffoPancake={enableWaffoPancake}
@@ -869,5 +912,5 @@ export function SubscriptionPlansCard({
         }
       />
     </>
-  );
+  )
 }

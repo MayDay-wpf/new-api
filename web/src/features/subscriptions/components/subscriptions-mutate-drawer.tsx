@@ -441,6 +441,35 @@ export function SubscriptionsMutateDrawer({
                   )}
                 />
 
+                <FormField
+                  control={form.control}
+                  name="reset_price_multiplier"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("Reset Price Markup")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          onChange={(e) =>
+                            field.onChange(
+                              Number.parseFloat(e.target.value) || 0,
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          "The paid reset price is the plan price prorated to the longest quota window (a weekly window on a monthly plan costs about a quarter), then multiplied by (1 + this markup). 0.5 means 1.5 times the prorated price.",
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="sm:col-span-2">
                   <FormField
                     control={form.control}

@@ -279,6 +279,14 @@ func AdminCreateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.Currency = currency
+	if req.Plan.ResetPriceMultiplier < 0 {
+		common.ApiErrorT(c, "Reset price markup cannot be negative")
+		return
+	}
+	if req.Plan.ResetPriceMultiplier > 100 {
+		common.ApiErrorT(c, "Reset price markup is too large")
+		return
+	}
 	if req.Plan.AllowBalancePay == nil {
 		req.Plan.AllowBalancePay = common.GetPointer(true)
 	}
@@ -363,6 +371,14 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 		return
 	}
 	req.Plan.Currency = currency
+	if req.Plan.ResetPriceMultiplier < 0 {
+		common.ApiErrorT(c, "Reset price markup cannot be negative")
+		return
+	}
+	if req.Plan.ResetPriceMultiplier > 100 {
+		common.ApiErrorT(c, "Reset price markup is too large")
+		return
+	}
 	if req.Plan.DurationUnit == "" {
 		req.Plan.DurationUnit = model.SubscriptionDurationMonth
 	}
@@ -412,6 +428,7 @@ func AdminUpdateSubscriptionPlan(c *gin.Context) {
 			"subtitle":                   req.Plan.Subtitle,
 			"price_amount":               req.Plan.PriceAmount,
 			"currency":                   req.Plan.Currency,
+			"reset_price_multiplier":     req.Plan.ResetPriceMultiplier,
 			"duration_unit":              req.Plan.DurationUnit,
 			"duration_value":             req.Plan.DurationValue,
 			"custom_seconds":             req.Plan.CustomSeconds,

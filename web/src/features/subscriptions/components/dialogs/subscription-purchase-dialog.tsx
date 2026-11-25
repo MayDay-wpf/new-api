@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
-import { Crown, CalendarClock, Package } from 'lucide-react'
+import { Crown, CalendarClock, Package, RefreshCw } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -47,6 +47,9 @@ import {
   paySubscriptionEpay,
   paySubscriptionWaffoPancake,
   paySubscriptionBalance,
+  resetSubscriptionQuotaWithBalance,
+  resetSubscriptionQuotaEpay,
+  resetSubscriptionQuotaWaffoPancake,
 } from '../../api'
 import {
   formatDuration,
@@ -75,6 +78,8 @@ interface Props {
   purchaseCount?: number
   /** The user already holds this plan: the purchase renews it instead of adding a slot. */
   renewal?: boolean
+  /** Reset mode charges for clearing the active subscription's quota counters. */
+  mode?: 'purchase' | 'reset'
   userQuota?: number
   onPurchaseSuccess?: () => void | Promise<void>
 }
@@ -104,15 +109,20 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const plan = props.plan?.plan
   if (!plan) return null
 
-  const hasStripe = props.enableStripe && !!plan.stripe_price_id
-  const hasCreem = props.enableCreem && !!plan.creem_product_id
+  const isReset = props.mode === 'reset'
+  // Stripe and Creem bill a fixed catalog product, so they cannot charge the
+  // computed reset price and never support coupons either.
+  const hasStripe = !isReset && props.enableStripe && !!plan.stripe_price_id
+  const hasCreem = !isReset && props.enableCreem && !!plan.creem_product_id
   const hasWaffoPancake =
     props.enableWaffoPancake && !!plan.waffo_pancake_product_id
   const hasEpay =
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
   const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
   const totalAmount = Number(plan.total_amount || 0)
-  const priceAmount = Number(plan.price_amount || 0)
+  const priceAmount = isReset
+    ? Number(plan.reset_price || 0)
+    : Number(plan.price_amount || 0)
   const couponSummary = calculateCouponDiscount(priceAmount, selectedCoupons)
   const hasCoupons = selectedCoupons.length > 0
   const finalAmount = hasCoupons ? couponSummary.finalAmount : priceAmount
@@ -129,13 +139,23 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const allowBalancePay = plan.allow_balance_pay !== false
   const insufficientBalance = userQuota < balanceCost
   const limitReached =
+    !isReset &&
     !props.renewal &&
     (props.purchaseLimit || 0) > 0 &&
     (props.purchaseCount || 0) >= (props.purchaseLimit || 0)
   const planQuotaLimits = plan.quota_limits || []
   const legacyResetPeriod = formatResetPeriod(plan, t)
   const showLegacyReset =
-    planQuotaLimits.length === 0 && legacyResetPeriod !== t('No Reset')
+    !isReset &&
+    planQuotaLimits.length === 0 &&
+    legacyResetPeriod !== t('No Reset')
+  const balancePay = isReset
+    ? resetSubscriptionQuotaWithBalance
+    : paySubscriptionBalance
+  const epayPay = isReset ? resetSubscriptionQuotaEpay : paySubscriptionEpay
+  const waffoPancakePay = isReset
+    ? resetSubscriptionQuotaWaffoPancake
+    : paySubscriptionWaffoPancake
 
   const handlePayStripe = async () => {
     setPaying(true)
@@ -185,7 +205,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
   const handlePayWaffoPancake = async () => {
     setPaying(true)
     try {
-      const res = await paySubscriptionWaffoPancake({
+      const res = await waffoPancakePay({
         plan_id: plan.id,
         coupon_ids: couponIds,
       })
@@ -214,7 +234,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
     }
     setPaying(true)
     try {
-      const res = await paySubscriptionEpay({
+      const res = await epayPay({
         plan_id: plan.id,
         payment_method: selectedEpayMethod,
         coupon_ids: couponIds,
@@ -256,13 +276,17 @@ export function SubscriptionPurchaseDialog(props: Props) {
     }
     setPaying(true)
     try {
-      const res = await paySubscriptionBalance({
+      const res = await balancePay({
         plan_id: plan.id,
         coupon_ids: couponIds,
       })
       if (res.success) {
         refreshCoupons()
-        toast.success(t('Subscription purchased successfully'))
+        toast.success(
+          isReset
+            ? t('Subscription quota reset successfully')
+            : t('Subscription purchased successfully')
+        )
         void props.onPurchaseSuccess?.()
         props.onOpenChange(false)
       } else {
@@ -281,8 +305,14 @@ export function SubscriptionPurchaseDialog(props: Props) {
       onOpenChange={props.onOpenChange}
       title={
         <>
-          <Crown className='h-5 w-5' />
-          {t('Purchase Subscription')}
+          {isReset ? (
+            <RefreshCw className='h-5 w-5' />
+          ) : (
+            <Crown className='h-5 w-5' />
+          )}
+          {isReset
+            ? t('Reset subscription quota')
+            : t('Purchase Subscription')}
         </>
       }
       contentClassName='max-sm:w-[calc(100vw-1.5rem)] sm:max-w-md'
@@ -300,15 +330,17 @@ export function SubscriptionPurchaseDialog(props: Props) {
               {plan.title}
             </span>
           </div>
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground text-sm'>
-              {t('Validity Period')}
-            </span>
-            <span className='flex items-center gap-1 text-sm'>
-              <CalendarClock className='h-3.5 w-3.5' />
-              {formatDuration(plan, t)}
-            </span>
-          </div>
+          {!isReset && (
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Validity Period')}
+              </span>
+              <span className='flex items-center gap-1 text-sm'>
+                <CalendarClock className='h-3.5 w-3.5' />
+                {formatDuration(plan, t)}
+              </span>
+            </div>
+          )}
           {planQuotaLimits.length > 0 && (
             <div className='flex justify-between gap-3'>
               <span className='text-muted-foreground text-sm'>
@@ -334,16 +366,18 @@ export function SubscriptionPurchaseDialog(props: Props) {
               <span className='text-sm'>{legacyResetPeriod}</span>
             </div>
           )}
-          <div className='flex items-center justify-between'>
-            <span className='text-muted-foreground text-sm'>
-              {t('Plan Quota')}
-            </span>
-            <span className='flex items-center gap-1 text-sm'>
-              <Package className='h-3.5 w-3.5' />
-              {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
-            </span>
-          </div>
-          {plan.upgrade_group && (
+          {!isReset && (
+            <div className='flex items-center justify-between'>
+              <span className='text-muted-foreground text-sm'>
+                {t('Plan Quota')}
+              </span>
+              <span className='flex items-center gap-1 text-sm'>
+                <Package className='h-3.5 w-3.5' />
+                {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
+              </span>
+            </div>
+          )}
+          {!isReset && plan.upgrade_group && (
             <div className='flex items-center justify-between'>
               <span className='text-muted-foreground text-sm'>
                 {t('Upgrade Group')}
@@ -401,11 +435,21 @@ export function SubscriptionPurchaseDialog(props: Props) {
           </Alert>
         )}
 
-        {props.renewal && !limitReached && (
+        {!isReset && props.renewal && !limitReached && (
           <Alert>
             <AlertDescription>
               {t(
                 'This purchase renews your active subscription, resets its quota usage and extends its validity.'
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {isReset && (
+          <Alert>
+            <AlertDescription>
+              {t(
+                'The payment resets every quota window of your active subscription. Its validity is unchanged.'
               )}
             </AlertDescription>
           </Alert>
