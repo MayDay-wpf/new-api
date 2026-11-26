@@ -34,6 +34,10 @@ func TestBillingDiscountRuleMatches(t *testing.T) {
 		{"all mode needs user and channel", BillingDiscountRule{Enabled: true, UserIds: []int{7}, ChannelIds: []int{5}, MatchMode: BillingDiscountMatchAll}, 7, 6, "", false},
 		{"all mode with user and channel hits", BillingDiscountRule{Enabled: true, UserIds: []int{7}, ChannelIds: []int{5}, MatchMode: BillingDiscountMatchAll}, 7, 5, "", true},
 		{"all mode also counts user agent", BillingDiscountRule{Enabled: true, UserIds: []int{7}, ChannelIds: []int{5}, UserAgents: []string{"cli"}, MatchMode: BillingDiscountMatchAll}, 7, 5, "curl/8", false},
+		{"channel list restricts any mode", BillingDiscountRule{Enabled: true, UserAgents: []string{"claude"}, ChannelIds: []int{3}}, 1, 5, "claude-cli/2.0.1", false},
+		{"channel list restricts any mode with user hit", BillingDiscountRule{Enabled: true, UserIds: []int{7}, ChannelIds: []int{3}}, 7, 5, "", false},
+		{"channel list allows any mode on a listed channel", BillingDiscountRule{Enabled: true, UserAgents: []string{"claude"}, ChannelIds: []int{3}}, 1, 3, "claude-cli/2.0.1", true},
+		{"unknown channel leaves other conditions in charge", BillingDiscountRule{Enabled: true, UserAgents: []string{"claude"}, ChannelIds: []int{3}}, 1, 0, "claude-cli/2.0.1", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

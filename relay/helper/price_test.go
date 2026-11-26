@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -802,3 +803,54 @@ func (s *priceTestReservation) GetPreConsumedQuota() int { return s.held }
 func (s *priceTestReservation) Reserve(quota int) error  { s.held = max(s.held, quota); return nil }
 
 func (s *priceTestReservation) ReserveBeforeSubmit(quota int) error { return s.Reserve(quota) }
+
+// The distributor pins the serving channel before the relay starts, so a
+// channel-scoped discount must already apply to the first attempt's price even
+// though ChannelMeta is still empty at that point.
+func TestBillingDiscountFollowsTheChannelSelectedBeforePricing(t *testing.T) {
+	previous := config.GlobalConfig.ExportAllConfigs()
+	previousRatios := ratio_setting.ModelRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(previous))
+		require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(previousRatios))
+	})
+	require.NoError(t, ratio_setting.UpdateModelRatioByJSONString(`{"discount-channel-model":1}`))
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"group_ratio_setting.group_ratio": `{"default":1}`,
+		"billing_discount_setting.rules":  `[{"name":"channel-3","enabled":true,"ratio":0.5,"user_ids":[],"channel_ids":[3],"user_agents":["claude"],"match_mode":"all","ua_match":"contains"}]`,
+	}))
+
+	for _, tc := range []struct {
+		name         string
+		channelID    int
+		wantRatio    float64
+		wantDiscount float64
+		wantPreCons  int
+	}{
+		{"listed channel before ChannelMeta exists", 3, 0.5, 0.5, 500},
+		{"a channel outside the list keeps the full price", 5, 1, 0, 1000},
+		{"no channel yet keeps the full price", 0, 1, 0, 1000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			req.Header.Set("User-Agent", "claude-cli/2.0.1")
+			ctx.Request = req
+			if tc.channelID > 0 {
+				ctx.Set(string(constant.ContextKeyChannelId), tc.channelID)
+			}
+
+			info := &relaycommon.RelayInfo{
+				OriginModelName: "discount-channel-model",
+				UserId:          1,
+				UserGroup:       "default",
+				UsingGroup:      "default",
+			}
+			price, err := ModelPriceHelper(ctx, info, 1000, &types.TokenCountMeta{})
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantRatio, price.GroupRatioInfo.GroupRatio)
+			assert.Equal(t, tc.wantDiscount, price.GroupRatioInfo.DiscountRatio)
+			assert.Equal(t, tc.wantPreCons, price.QuotaToPreConsume)
+		})
+	}
+}

@@ -452,9 +452,7 @@ export function DiscountRuleEditorDialog(props: Props) {
                     onValueChange={(values) =>
                       setScheduleForm({
                         ...scheduleForm,
-                        weekdays: values
-                          .map(Number)
-                          .sort((a, b) => a - b),
+                        weekdays: values.map(Number).sort((a, b) => a - b),
                       })
                     }
                   >
@@ -485,9 +483,7 @@ export function DiscountRuleEditorDialog(props: Props) {
                     onValueChange={(values) =>
                       setScheduleForm({
                         ...scheduleForm,
-                        monthDays: values
-                          .map(Number)
-                          .sort((a, b) => a - b),
+                        monthDays: values.map(Number).sort((a, b) => a - b),
                       })
                     }
                   >
@@ -654,6 +650,13 @@ export function DiscountRuleEditorDialog(props: Props) {
                 {t('All conditions match')}
               </NativeSelectOption>
             </NativeSelect>
+            {draft.channel_ids.length > 0 && (
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'Channels always restrict the rule: requests served by another channel never match. The condition logic only combines users and User-Agents.'
+                )}
+              </p>
+            )}
           </div>
         </div>
 

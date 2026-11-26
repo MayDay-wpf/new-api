@@ -338,6 +338,10 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 			Name:    c.GetString("channel_name"),
 			AutoBan: &autoBanInt,
 		}
+		// The channel is already pinned for this attempt, so the admin billing
+		// discount has to be resolved against it here as well; otherwise a
+		// channel-scoped rule would keep the price computed before selection.
+		info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info, channel.Id)
 		service.RequestPolicy(c).BeginAttempt(channel, info.UsingGroup)
 		return channel, nil
 	}

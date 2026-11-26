@@ -37,7 +37,9 @@ type BillingDiscountSchedule struct {
 
 // BillingDiscountRule 是一条折扣规则：命中后最终计费乘以 Ratio。
 // 条件只统计非空列表：any 模式任一条件命中即生效，all 模式要求全部命中；
-// 没有任何条件的规则永不命中。渠道条件按请求实际使用的渠道判断。
+// 没有任何条件的规则永不命中。渠道条件按请求实际使用的渠道判断，
+// 且渠道列表始终是硬性限制：请求落在列表之外的渠道时规则一律不生效
+// （列表只在渠道尚未确定时留给其它条件判断）。
 type BillingDiscountRule struct {
 	Name       string                   `json:"name"`
 	Enabled    bool                     `json:"enabled"`
@@ -243,6 +245,13 @@ func (rule BillingDiscountRule) MatchesAt(userId int, channelId int, userAgent s
 	if !rule.Schedule.IsActiveAt(now) {
 		return false
 	}
+	// A channel list always restricts the rule, whatever the condition logic:
+	// a request served by a channel outside the list never gets the discount.
+	// While the serving channel is still unknown (channelId 0) the list cannot
+	// be judged, so the remaining conditions decide.
+	if len(rule.ChannelIds) > 0 && channelId > 0 && !slices.Contains(rule.ChannelIds, channelId) {
+		return false
+	}
 	conditions := 0
 	hits := 0
 	if len(rule.UserIds) > 0 {
@@ -274,8 +283,8 @@ func (rule BillingDiscountRule) MatchesAt(userId int, channelId int, userAgent s
 
 // ResolveBillingDiscount returns the lowest ratio among matching rules, or
 // (1, "", false) when nothing matches. Invalid stored ratios are ignored.
-// channelId is 0 when the request has no channel yet (e.g. pre-consume before
-// channel selection); rules with channel conditions simply do not match then.
+// channelId is 0 while the request has no channel yet; the channel conditions of
+// a rule are then left undecided and its other conditions decide.
 func ResolveBillingDiscount(userId int, channelId int, userAgent string) (float64, string, bool) {
 	return resolveBillingDiscountAt(userId, channelId, userAgent, time.Now())
 }

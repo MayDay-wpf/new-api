@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
@@ -35,9 +36,10 @@ func modelPriceNotConfiguredError(c *gin.Context, modelName string, userId int) 
 
 // HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present.
 // channelID is the channel that will serve the current attempt (0 before the
-// channel is selected). It is explicit because on retries relayInfo still
-// carries the previous attempt's channel meta while the new channel is already
-// known to the caller.
+// channel is selected, in which case the channel pinned in the request context
+// by the distributor is used). It is explicit because on retries relayInfo
+// still carries the previous attempt's channel meta while the new channel is
+// already known to the caller.
 func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, channelID int) hosttypes.GroupRatioInfo {
 	groupRatioInfo := hosttypes.GroupRatioInfo{
 		GroupRatio:        1.0, // default ratio
@@ -66,6 +68,14 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, channe
 	// Admin billing discounts are folded into the group ratio that every
 	// pre-consume and settlement path multiplies, so a rule bound to a channel
 	// only affects the attempts served by that channel.
+	//
+	// The distributor pins the serving channel in the request context before
+	// the relay starts, so that channel is already known while ChannelMeta is
+	// still being built (first attempt and pre-consume). Without this fallback
+	// a channel-scoped rule is evaluated against "no channel" and never fires.
+	if channelID <= 0 && ctx != nil {
+		channelID = common.GetContextKeyInt(ctx, constant.ContextKeyChannelId)
+	}
 	userAgent := ""
 	if ctx.Request != nil {
 		userAgent = ctx.Request.UserAgent()
