@@ -452,6 +452,7 @@ func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now 
 	anchor := time.Unix(sub.StartTime, 0)
 	nowUnix := now.Unix()
 	result := make(SubscriptionQuotaLimitUsages, 0, len(limits))
+	rolled := make(SubscriptionQuotaLimitUsages, 0, len(limits))
 	for _, limit := range limits {
 		key := limit.Key()
 		start, end := quotaLimitWindow(limit, anchor, now)
@@ -460,6 +461,9 @@ func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now 
 			// A new window (first tracked, unusable range, or the stored one
 			// already elapsed): start counting from zero.
 			usage = SubscriptionQuotaLimitUsage{Key: key, WindowStart: start, WindowEnd: end}
+			if ok {
+				rolled = append(rolled, usage)
+			}
 		} else {
 			// Still the same window: keep the usage, but follow the boundaries
 			// computed from the subscription start so the next reset time stays
@@ -469,6 +473,7 @@ func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now 
 		}
 		result = append(result, usage)
 	}
+	resetQuotaLimitsCarriedAcrossRollover(result, rolled)
 	applyQuotaLimitAccumulation(result)
 	changed := len(sub.QuotaLimitUsage) != len(result)
 	if !changed {
@@ -486,6 +491,35 @@ func refreshQuotaLimitUsages(sub *UserSubscription, plan *SubscriptionPlan, now 
 // quotaLimitUsageSpan returns the length of a tracked window in seconds.
 func quotaLimitUsageSpan(usage SubscriptionQuotaLimitUsage) int64 {
 	return usage.WindowEnd - usage.WindowStart
+}
+
+// resetQuotaLimitsCarriedAcrossRollover clears every shorter window that is
+// still running but started before a longer window rolled over. Window
+// boundaries are not aligned (a 5-hour window can straddle the weekly boundary,
+// a weekly window can straddle the monthly boundary), so without this the
+// shorter window would carry usage from the previous long period into the new
+// one and applyQuotaLimitAccumulation would write it into the fresh long
+// window. A shorter window that already started inside the new long window only
+// holds usage of that new period and is kept.
+func resetQuotaLimitsCarriedAcrossRollover(usages SubscriptionQuotaLimitUsages, rolled SubscriptionQuotaLimitUsages) {
+	if len(rolled) == 0 {
+		return
+	}
+	for i := range usages {
+		if usages[i].Used == 0 {
+			continue
+		}
+		for _, reset := range rolled {
+			if usages[i].Key == reset.Key ||
+				quotaLimitUsageSpan(usages[i]) >= quotaLimitUsageSpan(reset) ||
+				usages[i].WindowStart >= reset.WindowStart ||
+				!quotaLimitUsagesOverlap(usages[i], reset) {
+				continue
+			}
+			usages[i].Used = 0
+			break
+		}
+	}
 }
 
 // quotaLimitUsagesOverlap reports whether two tracked windows share any instant.
