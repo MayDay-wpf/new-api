@@ -379,6 +379,7 @@ func migrateDB() error {
 		&CasbinRule{},
 		&AuthzRole{},
 		&UserAccessToken{},
+		&SnowAppAuthCode{},
 		&Coupon{},
 		&UserCoupon{},
 		&Ticket{},

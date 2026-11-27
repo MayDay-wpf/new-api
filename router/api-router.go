@@ -61,6 +61,16 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/:provider", middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.TryUserAuth(), controller.HandleOAuth)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
 
+		// Snow App 桌面客户端授权（授权页由 Go 直接渲染，换取长期访问令牌）
+		apiRouter.POST("/snow-app/authorize", middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.UserAuth(), controller.SnowAppAuthorize)
+		apiRouter.POST("/snow-app/token", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.SnowAppExchangeToken)
+		snowAppRoute := apiRouter.Group("/snow-app")
+		snowAppRoute.Use(middleware.DisableCache(), middleware.UserAuth())
+		{
+			snowAppRoute.GET("/channels", controller.SnowAppChannels)
+			snowAppRoute.POST("/key", middleware.CriticalRateLimit(), controller.SnowAppEnsureKey)
+		}
+
 		apiRouter.POST("/stripe/webhook", anonymousRequestBodyLimit, controller.StripeWebhook)
 		apiRouter.POST("/creem/webhook", anonymousRequestBodyLimit, controller.CreemWebhook)
 		apiRouter.POST("/waffo/webhook", anonymousRequestBodyLimit, controller.WaffoWebhook)

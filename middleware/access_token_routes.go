@@ -57,6 +57,9 @@ var accessTokenRouteRules = map[string]accessTokenRouteRule{
 	"GET /api/oauth/:provider":            accessTokenSessionRule,
 	"GET /api/verify/methods":             accessTokenAnyRule,
 	"POST /api/verify":                    accessTokenAnyRule,
+	"POST /api/snow-app/authorize":        accessTokenSessionRule,
+	"GET /api/snow-app/channels":          accessTokenScopeRule("api_key:read"),
+	"POST /api/snow-app/key":              accessTokenScopeRule("api_key:write"),
 
 	// router/api-router.go: /api/user (self)
 	"GET /api/user/sessions":                       accessTokenSessionRule,

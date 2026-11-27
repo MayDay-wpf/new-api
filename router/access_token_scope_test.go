@@ -51,6 +51,9 @@ var accessTokenExemptRoutes = []string{
 	"GET /api/oauth/telegram/login",
 	"GET /api/oauth/telegram/bind/:flow_token",
 
+	// Snow App desktop client: exchanges a one-time authorization code.
+	"POST /api/snow-app/token",
+
 	// Browser session cookie endpoints.
 	"POST /api/user/auth/refresh",
 	"POST /api/user/auth/logout",
