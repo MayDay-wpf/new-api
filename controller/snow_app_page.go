@@ -14,6 +14,7 @@ import (
 
 type snowAppPageConfig struct {
 	ClientId            string `json:"client_id"`
+	ClientLabel         string `json:"client_label"`
 	RedirectUri         string `json:"redirect_uri"`
 	State               string `json:"state"`
 	CodeChallenge       string `json:"code_challenge"`
@@ -73,26 +74,33 @@ func SnowAppAuthorizePage(c *gin.Context) {
 		CodeChallenge:       strings.TrimSpace(c.Query("code_challenge")),
 		CodeChallengeMethod: strings.TrimSpace(c.Query("code_challenge_method")),
 	}
-	if _, err := validateSnowAppAuthorizeRequest(&snowAppAuthorizeRequest{
+	clientId, _, err := validateSnowAppAuthorizeRequest(&snowAppAuthorizeRequest{
 		ClientId:            cfg.ClientId,
 		RedirectUri:         cfg.RedirectUri,
 		State:               cfg.State,
 		CodeChallenge:       cfg.CodeChallenge,
 		CodeChallengeMethod: cfg.CodeChallengeMethod,
-	}); err != nil {
+	})
+	if err != nil {
 		c.Header("Cache-Control", "no-store")
-		c.Data(http.StatusBadRequest, "text/html; charset=utf-8", []byte(snowAppPageHTML("", err.Error())))
+		c.Data(http.StatusBadRequest, "text/html; charset=utf-8", []byte(snowAppPageHTML("", "", err.Error())))
 		return
 	}
+	cfg.ClientId = clientId
+	cfg.ClientLabel, _ = snowAppClientLabel(clientId)
 	c.Header("Cache-Control", "no-store")
 	c.Header("Referrer-Policy", "no-referrer")
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(snowAppPageHTML(encodeSnowAppPageConfig(cfg), "")))
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(snowAppPageHTML(encodeSnowAppPageConfig(cfg), cfg.ClientLabel, "")))
 }
 
-// snowAppPageHTML 生成授权页；configJSON 为空时展示启动失败提示。
-func snowAppPageHTML(configJSON string, startupError string) string {
+// snowAppPageHTML 生成授权页；clientLabel 用于提示正在授权的客户端。
+func snowAppPageHTML(configJSON string, clientLabel string, startupError string) string {
+	if strings.TrimSpace(clientLabel) == "" {
+		clientLabel = "客户端"
+	}
 	page := strings.ReplaceAll(snowAppAuthorizePageTemplate, "__SNOW_APP_CONFIG__", configJSON)
 	page = strings.ReplaceAll(page, "__SNOW_APP_LOGO__", snowAppBrandMark())
+	page = strings.ReplaceAll(page, "__SNOW_APP_CLIENT__", html.EscapeString(clientLabel))
 	errorJSON, err := json.Marshal(startupError)
 	if err != nil {
 		errorJSON = []byte(`""`)
@@ -106,7 +114,7 @@ const snowAppAuthorizePageTemplate = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Snow AI Router · Snow App 授权</title>
+<title>Snow AI Router · __SNOW_APP_CLIENT__ 授权</title>
 <style>
 :root {
   color-scheme: light dark;
@@ -240,7 +248,7 @@ button.ghost {
 
   <section id="viewLogin" class="hidden">
     <h1>登录你的账号</h1>
-    <p class="subtitle">登录后即可授权 Snow App 使用这台路由服务。</p>
+    <p class="subtitle">登录后即可授权 __SNOW_APP_CLIENT__ 使用这台路由服务。</p>
     <div id="loginError" class="error hidden"></div>
     <form id="loginForm" autocomplete="on">
       <div class="field">
@@ -259,8 +267,8 @@ button.ghost {
   </section>
 
   <section id="viewAccount" class="hidden">
-    <h1>授权 Snow App</h1>
-    <p class="subtitle">确认后将在 Snow App 中接入你的可用渠道。</p>
+    <h1>授权 __SNOW_APP_CLIENT__</h1>
+    <p class="subtitle">确认后将在 __SNOW_APP_CLIENT__ 中接入你的可用渠道。</p>
     <div id="authorizeError" class="error hidden"></div>
     <div class="account">
       <div id="accountName" class="account-name"></div>
@@ -268,16 +276,16 @@ button.ghost {
     </div>
     <ul class="permissions">
       <li>读取账号资料与可用渠道</li>
-      <li>创建并读取由 Snow App 生成的 API 密钥</li>
+      <li>创建并读取由 __SNOW_APP_CLIENT__ 生成的 API 密钥</li>
     </ul>
     <div class="actions">
-      <button id="authorizeButton" type="button">授权并返回 Snow App</button>
+      <button id="authorizeButton" type="button">授权并返回 __SNOW_APP_CLIENT__</button>
       <button id="switchButton" class="ghost" type="button">使用其他账号</button>
     </div>
   </section>
 
   <p id="status" class="status"></p>
-  <p class="footnote">此页面由 Snow AI Router 提供，授权结果直接返回本机的 Snow App。</p>
+  <p class="footnote">此页面由 Snow AI Router 提供，授权结果直接返回本机的 __SNOW_APP_CLIENT__。</p>
 </main>
 
 <script>
@@ -421,7 +429,7 @@ button.ghost {
         showError("authorizeError", errorMessage(result, "授权失败，请重新登录后再试"));
         return;
       }
-      setStatus("授权成功，正在返回 Snow App…");
+      setStatus("授权成功，正在返回 " + (CONFIG.client_label || "客户端") + "…");
       var target = CONFIG.redirect_uri + "?code=" + encodeURIComponent(payload.data.code);
       if (CONFIG.state) {
         target += "&state=" + encodeURIComponent(CONFIG.state);
@@ -458,7 +466,7 @@ button.ghost {
     return;
   }
   if (!CONFIG || !CONFIG.redirect_uri) {
-    startupErrorEl.textContent = "授权请求缺少必要参数，请从 Snow App 重新发起登录。";
+    startupErrorEl.textContent = "授权请求缺少必要参数，请从客户端重新发起登录。";
     startupErrorEl.classList.remove("hidden");
     showView("loading");
     return;

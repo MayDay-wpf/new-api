@@ -20,13 +20,34 @@ import (
 )
 
 const (
-	snowAppClientId        = "snow-app"
-	snowAppTokenName       = "Snow App"
-	snowAppTokenNamePrefix = "Snow App · "
-	snowAppAuthCodeTTL     = int64(5 * 60)
-	snowAppPatExpiryDays   = 365
-	snowAppTokenNameLimit  = 50
+	snowAppTokenName             = "Snow"
+	snowAppLegacyTokenName       = "Snow App"
+	snowAppTokenNamePrefix       = "Snow · "
+	snowAppLegacyTokenNamePrefix = "Snow App · "
+	snowAppAuthCodeTTL           = int64(5 * 60)
+	snowAppPatExpiryDays         = 365
+	snowAppTokenNameLimit        = 50
 )
+
+// 已接入的桌面客户端；client_id 决定授权页展示的名称。
+var snowAppClients = map[string]string{
+	"snow-app": "Snow App",
+	"snow-cli": "Snow CLI",
+}
+
+func snowAppClientLabel(clientId string) (string, bool) {
+	label, ok := snowAppClients[strings.TrimSpace(clientId)]
+	return label, ok
+}
+
+func isSnowAppTokenName(name string) bool {
+	return name == snowAppTokenName || name == snowAppLegacyTokenName
+}
+
+func isSnowAppChannelTokenName(name string) bool {
+	return strings.HasPrefix(name, snowAppTokenNamePrefix) ||
+		strings.HasPrefix(name, snowAppLegacyTokenNamePrefix)
+}
 
 // 桌面客户端只能通过授权换取这些最小权限。
 var snowAppTokenScopes = []string{
@@ -99,24 +120,25 @@ func isSnowAppPkceChallenge(value string) bool {
 	return true
 }
 
-func validateSnowAppAuthorizeRequest(req *snowAppAuthorizeRequest) (string, error) {
-	if strings.TrimSpace(req.ClientId) != snowAppClientId {
-		return "", errors.New("unsupported client_id")
+func validateSnowAppAuthorizeRequest(req *snowAppAuthorizeRequest) (string, string, error) {
+	clientId := strings.TrimSpace(req.ClientId)
+	if _, ok := snowAppClientLabel(clientId); !ok {
+		return "", "", errors.New("unsupported client_id")
 	}
 	redirectUri, err := normalizeSnowAppRedirectUri(req.RedirectUri)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if method := strings.TrimSpace(req.CodeChallengeMethod); method != "" && method != "S256" {
-		return "", errors.New("only the S256 PKCE method is supported")
+		return "", "", errors.New("only the S256 PKCE method is supported")
 	}
 	if !isSnowAppPkceChallenge(strings.TrimSpace(req.CodeChallenge)) {
-		return "", errors.New("code_challenge is invalid")
+		return "", "", errors.New("code_challenge is invalid")
 	}
 	if len(strings.TrimSpace(req.State)) > 256 {
-		return "", errors.New("state is too long")
+		return "", "", errors.New("state is too long")
 	}
-	return redirectUri, nil
+	return clientId, redirectUri, nil
 }
 
 func snowAppPkceChallenge(verifier string) string {
@@ -136,7 +158,7 @@ func SnowAppAuthorize(c *gin.Context) {
 		common.ApiErrorStatus(c, http.StatusBadRequest, errors.New("invalid request body"))
 		return
 	}
-	redirectUri, err := validateSnowAppAuthorizeRequest(&req)
+	clientId, redirectUri, err := validateSnowAppAuthorizeRequest(&req)
 	if err != nil {
 		common.ApiErrorStatus(c, http.StatusBadRequest, err)
 		return
@@ -152,6 +174,7 @@ func SnowAppAuthorize(c *gin.Context) {
 	record := &model.SnowAppAuthCode{
 		CodeHash:      model.AccessTokenFingerprint(code),
 		UserId:        userId,
+		ClientId:      clientId,
 		RedirectUri:   redirectUri,
 		CodeChallenge: strings.TrimSpace(req.CodeChallenge),
 		ExpiresAt:     now + snowAppAuthCodeTTL,
@@ -174,7 +197,8 @@ func SnowAppExchangeToken(c *gin.Context) {
 		common.ApiErrorStatus(c, http.StatusBadRequest, errors.New("invalid request body"))
 		return
 	}
-	if strings.TrimSpace(req.ClientId) != snowAppClientId {
+	clientId := strings.TrimSpace(req.ClientId)
+	if _, ok := snowAppClientLabel(clientId); !ok {
 		common.ApiErrorStatus(c, http.StatusBadRequest, errors.New("unsupported client_id"))
 		return
 	}
@@ -192,6 +216,10 @@ func SnowAppExchangeToken(c *gin.Context) {
 	record, err := model.ConsumeSnowAppAuthCode(model.AccessTokenFingerprint(strings.TrimSpace(req.Code)), now)
 	if err != nil {
 		common.ApiErrorStatus(c, http.StatusBadRequest, model.ErrSnowAppAuthCodeInvalid)
+		return
+	}
+	if record.ClientId != "" && record.ClientId != clientId {
+		common.ApiErrorStatus(c, http.StatusBadRequest, errors.New("client_id does not match the authorization request"))
 		return
 	}
 	if record.RedirectUri != redirectUri {
@@ -217,7 +245,7 @@ func SnowAppExchangeToken(c *gin.Context) {
 	// 同一账号重复授权时不再堆积历史令牌，只保留最新一枚。
 	if tokens, listErr := model.ListUserAccessTokens(user.Id); listErr == nil {
 		for i := range tokens {
-			if tokens[i].Name != snowAppTokenName {
+			if !isSnowAppTokenName(tokens[i].Name) {
 				continue
 			}
 			_, _ = model.DeleteUserAccessToken(user.Id, tokens[i].Id)
@@ -281,7 +309,7 @@ func snowAppTokenNameFor(group string) string {
 	return snowAppTokenNamePrefix + string(runes)
 }
 
-// SnowAppTokens 返回该账号由 Snow App 创建的 API 密钥（按分组索引）。
+// snowAppTokensByGroup 返回该账号由 Snow 客户端创建的 API 密钥（按分组索引）。
 func snowAppTokensByGroup(userId int) map[string]*model.Token {
 	result := make(map[string]*model.Token)
 	tokens, err := model.GetAllUserTokens(userId, 0, 1000)
@@ -289,7 +317,7 @@ func snowAppTokensByGroup(userId int) map[string]*model.Token {
 		return result
 	}
 	for _, token := range tokens {
-		if token == nil || !strings.HasPrefix(token.Name, snowAppTokenNamePrefix) {
+		if token == nil || !isSnowAppChannelTokenName(token.Name) {
 			continue
 		}
 		if _, exists := result[token.Group]; !exists {

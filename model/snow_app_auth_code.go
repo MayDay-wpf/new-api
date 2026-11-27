@@ -6,11 +6,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// SnowAppAuthCode 是 Snow App 桌面端的一次性授权码，只保存哈希值。
+// SnowAppAuthCode 是 Snow 桌面客户端的一次性授权码，只保存哈希值。
 type SnowAppAuthCode struct {
 	Id            int    `json:"id"`
 	CodeHash      string `json:"-" gorm:"type:varchar(64);uniqueIndex"`
 	UserId        int    `json:"user_id" gorm:"index"`
+	ClientId      string `json:"client_id" gorm:"type:varchar(32);index"`
 	RedirectUri   string `json:"redirect_uri" gorm:"type:varchar(512)"`
 	CodeChallenge string `json:"code_challenge" gorm:"type:varchar(128)"`
 	ExpiresAt     int64  `json:"expires_at" gorm:"bigint;index"`
