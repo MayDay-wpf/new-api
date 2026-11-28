@@ -246,18 +246,30 @@ func AdminReplyTicket(c *gin.Context) {
 	common.ApiSuccessT(c, "Reply sent", msg)
 }
 
-// GetUnreadCount 返回当前角色的未读工单数（给侧边栏红点用）。
+// GetUnreadCount 返回未读工单数（给侧边栏红点用）：
+// user_count 为自己提交的工单中有新回复的数量；admin_count 仅管理员返回，为待处理的用户消息数量。
 func GetUnreadCount(c *gin.Context) {
 	userId := c.GetInt("id")
 	isAdmin := c.GetInt("role") >= common.RoleAdminUser
-	count, err := model.CountUnreadTickets(userId, isAdmin)
+	userCount, err := model.CountUserUnreadTickets(userId)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	var adminCount int64
+	if isAdmin {
+		adminCount, err = model.CountAdminUnreadTickets()
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    gin.H{"count": count},
+		"data": gin.H{
+			"user_count":  userCount,
+			"admin_count": adminCount,
+		},
 	})
 }
 

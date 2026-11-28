@@ -55,10 +55,11 @@ export function useSidebarView(): ResolvedSidebarView {
   const pathname = useLocation({ select: (l) => l.pathname })
   const userRole = useAuthStore((s) => s.auth.user?.role)
   const modelPricingBadge = useModelPricingIssueBadge()
-  const ticketBadge = useTicketUnreadBadge()
+  const ticketBadges = useTicketUnreadBadge()
   const badges: SidebarBadges = {
     modelPricing: modelPricingBadge,
-    tickets: ticketBadge,
+    tickets: ticketBadges.user,
+    adminTickets: ticketBadges.admin,
   }
   const rootSidebarData = useSidebarData(badges)
   const configFilteredRoot = useSidebarConfig(rootSidebarData.navGroups)

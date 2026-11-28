@@ -185,7 +185,7 @@ export function useSidebarData(badges: SidebarBadges = {}): SidebarData {
             url: '/tickets/admin',
             activeUrls: ['/tickets/admin/'],
             icon: LifeBuoy,
-            badge: badges.tickets,
+            badge: badges.adminTickets,
           },
           {
             title: t('System Info'),

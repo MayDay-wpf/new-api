@@ -206,25 +206,25 @@ func MarkTicketRead(id int, role string) error {
 	return DB.Model(&Ticket{}).Where("id = ?", id).Update(column, time.Now().Unix()).Error
 }
 
-// CountUnreadTickets returns how many tickets have a newer message than the
-// role's last_read_at — for the sidebar badge.
-func CountUnreadTickets(userId int, isAdmin bool) (int64, error) {
+// CountUserUnreadTickets returns how many of the user's own tickets have an
+// admin reply newer than user_last_read_at — for the personal ticket badge.
+func CountUserUnreadTickets(userId int) (int64, error) {
 	var count int64
-	query := DB.Model(&Ticket{})
-	if isAdmin {
-		// Admin sees everything: unread = any ticket whose last message is
-		// newer than admin_last_read_at.
-		query = query.Where(
-			"updated_at > admin_last_read_at AND EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ?)",
-			TicketSenderRoleUser,
-		)
-	} else {
-		query = query.Where("user_id = ?", userId).Where(
-			"updated_at > user_last_read_at AND EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ?)",
-			TicketSenderRoleAdmin,
-		)
-	}
-	err := query.Count(&count).Error
+	err := DB.Model(&Ticket{}).Where("user_id = ?", userId).Where(
+		"updated_at > user_last_read_at AND EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ?)",
+		TicketSenderRoleAdmin,
+	).Count(&count).Error
+	return count, err
+}
+
+// CountAdminUnreadTickets returns how many tickets (across all users) have a
+// user message newer than admin_last_read_at — for the admin ticket badge.
+func CountAdminUnreadTickets() (int64, error) {
+	var count int64
+	err := DB.Model(&Ticket{}).Where(
+		"updated_at > admin_last_read_at AND EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ?)",
+		TicketSenderRoleUser,
+	).Count(&count).Error
 	return count, err
 }
 

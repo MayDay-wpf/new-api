@@ -62,9 +62,12 @@ export async function closeTicket(id: number): Promise<ApiResponse> {
   return res.data
 }
 
-/** Unread ticket count for the current viewer's role (sidebar badge). */
+/**
+ * Unread ticket counts for sidebar badges: `user_count` for the viewer's own
+ * tickets, `admin_count` for tickets awaiting admin attention (admins only).
+ */
 export async function getUnreadCount(): Promise<
-  ApiResponse<{ count: number }>
+  ApiResponse<{ user_count: number; admin_count: number }>
 > {
   const res = await api.get('/api/ticket/unread-count')
   return res.data

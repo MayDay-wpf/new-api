@@ -37,19 +37,29 @@ export function useInvalidateTicketUnread() {
   )
 }
 
-/** Formatted unread ticket count for sidebar badges, polled every 30 s. */
-export function useTicketUnreadBadge(): string | undefined {
+export type TicketUnreadBadges = {
+  /** Own tickets with unread admin replies (personal "Support Tickets") */
+  user?: string
+  /** Tickets with unread user messages (admin "Tickets") */
+  admin?: string
+}
+
+/** Formatted unread ticket counts for sidebar badges, polled every 30 s. */
+export function useTicketUnreadBadge(): TicketUnreadBadges {
   const { i18n } = useTranslation()
   const { data } = useQuery({
     queryKey: TICKET_UNREAD_QUERY_KEY,
     queryFn: async () => {
       const res = await getUnreadCount()
-      return res.success && res.data ? res.data.count : 0
+      return res.success && res.data
+        ? { user: res.data.user_count ?? 0, admin: res.data.admin_count ?? 0 }
+        : { user: 0, admin: 0 }
     },
     refetchInterval: 30_000,
     staleTime: 10_000,
   })
-  const count = data ?? 0
-  if (count === 0) return undefined
-  return formatNumber(count, toIntlLocale(i18n.resolvedLanguage || i18n.language))
+  const locale = toIntlLocale(i18n.resolvedLanguage || i18n.language)
+  const format = (count: number | undefined) =>
+    count ? formatNumber(count, locale) : undefined
+  return { user: format(data?.user), admin: format(data?.admin) }
 }

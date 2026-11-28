@@ -115,8 +115,10 @@ export type SidebarViewParent = {
 export type SidebarBadges = {
   /** Task models whose price needs attention, on the entries leading to model pricing */
   modelPricing?: string
-  /** Unread tickets for the current viewer's role, on the ticket entry */
+  /** Own tickets with unread admin replies, on the personal ticket entry */
   tickets?: string
+  /** Tickets with unread user messages, on the admin ticket entry */
+  adminTickets?: string
 }
 
 /**
