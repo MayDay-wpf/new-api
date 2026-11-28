@@ -159,7 +159,8 @@ func AddTicketMessage(ticketId int, senderId int, senderRole string, content str
 		if err := tx.Create(msg).Error; err != nil {
 			return err
 		}
-		updates := map[string]any{"updated_at": now}
+		// Replying implies the sender has seen the thread up to now.
+		updates := map[string]any{"updated_at": now, ticketReadColumn(senderRole): now}
 		if reopen {
 			updates["status"] = TicketStatusOpen
 			updates["closed_at"] = nil
@@ -198,22 +199,45 @@ func CloseTicket(id int, userId int, isAdmin bool) error {
 
 // MarkTicketRead updates the last_read_at for one side. `role` is either
 // TicketSenderRoleUser or TicketSenderRoleAdmin.
+//
+// UpdateColumn is used on purpose: a plain Update would let GORM bump
+// updated_at as well, so merely opening a ticket would reorder the list and
+// make it look "new" to the other side.
 func MarkTicketRead(id int, role string) error {
-	column := "user_last_read_at"
+	return DB.Model(&Ticket{}).Where("id = ?", id).
+		UpdateColumn(ticketReadColumn(role), time.Now().Unix()).Error
+}
+
+// ticketReadColumn is the last_read_at column of the reader `role`.
+func ticketReadColumn(role string) string {
 	if role == TicketSenderRoleAdmin {
-		column = "admin_last_read_at"
+		return "admin_last_read_at"
 	}
-	return DB.Model(&Ticket{}).Where("id = ?", id).Update(column, time.Now().Unix()).Error
+	return "user_last_read_at"
+}
+
+// ticketOtherRole is the sender role whose messages count as unread for `role`.
+func ticketOtherRole(role string) string {
+	if role == TicketSenderRoleAdmin {
+		return TicketSenderRoleUser
+	}
+	return TicketSenderRoleAdmin
+}
+
+// ticketUnreadCondition matches tickets that have a message from the other
+// side written after `role` last opened the ticket. Own replies, closing the
+// ticket, or the other side opening it never make a ticket unread.
+func ticketUnreadCondition(role string) (string, string) {
+	return "EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ? AND ticket_messages.created_at > tickets." + ticketReadColumn(role) + ")",
+		ticketOtherRole(role)
 }
 
 // CountUserUnreadTickets returns how many of the user's own tickets have an
 // admin reply newer than user_last_read_at — for the personal ticket badge.
 func CountUserUnreadTickets(userId int) (int64, error) {
 	var count int64
-	err := DB.Model(&Ticket{}).Where("user_id = ?", userId).Where(
-		"updated_at > user_last_read_at AND EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ?)",
-		TicketSenderRoleAdmin,
-	).Count(&count).Error
+	cond, sender := ticketUnreadCondition(TicketSenderRoleUser)
+	err := DB.Model(&Ticket{}).Where("user_id = ?", userId).Where(cond, sender).Count(&count).Error
 	return count, err
 }
 
@@ -221,10 +245,8 @@ func CountUserUnreadTickets(userId int) (int64, error) {
 // user message newer than admin_last_read_at — for the admin ticket badge.
 func CountAdminUnreadTickets() (int64, error) {
 	var count int64
-	err := DB.Model(&Ticket{}).Where(
-		"updated_at > admin_last_read_at AND EXISTS (SELECT 1 FROM ticket_messages WHERE ticket_messages.ticket_id = tickets.id AND ticket_messages.sender_role = ?)",
-		TicketSenderRoleUser,
-	).Count(&count).Error
+	cond, sender := ticketUnreadCondition(TicketSenderRoleAdmin)
+	err := DB.Model(&Ticket{}).Where(cond, sender).Count(&count).Error
 	return count, err
 }
 
@@ -248,24 +270,25 @@ func GetUserTickets(userId int, page, pageSize int) ([]*Ticket, int64, error) {
 		return nil, 0, err
 	}
 	fillTicketStats(tickets)
-	unreadFlags := ticketUnreadFlags(ticketIdList(tickets), TicketSenderRoleAdmin)
+	unreadFlags := ticketUnreadFlags(ticketIdList(tickets), TicketSenderRoleUser)
 	for _, t := range tickets {
-		t.Unread = unreadFlags[t.Id] && t.LastMessageAt > t.UserLastReadAt
+		t.Unread = unreadFlags[t.Id]
 	}
 	return tickets, total, nil
 }
 
-// ticketUnreadFlags returns a set of ticket ids that have at least one message
-// from `senderRole` — one query for the whole batch.
-func ticketUnreadFlags(ticketIds []int, senderRole string) map[int]bool {
+// ticketUnreadFlags returns the set of ticket ids that are unread for the
+// reader `role` (see ticketUnreadCondition) — one query for the whole batch.
+func ticketUnreadFlags(ticketIds []int, role string) map[int]bool {
 	if len(ticketIds) == 0 {
 		return nil
 	}
+	cond, sender := ticketUnreadCondition(role)
 	var ids []int
-	if err := DB.Model(&TicketMessage{}).
-		Where("ticket_id IN ? AND sender_role = ?", ticketIds, senderRole).
-		Distinct("ticket_id").
-		Pluck("ticket_id", &ids).Error; err != nil {
+	if err := DB.Model(&Ticket{}).
+		Where("id IN ?", ticketIds).
+		Where(cond, sender).
+		Pluck("id", &ids).Error; err != nil {
 		return nil
 	}
 	flags := make(map[int]bool, len(ids))
@@ -319,9 +342,9 @@ func GetAllTickets(status string, keyword string, page, pageSize int) ([]*Ticket
 		return nil, 0, err
 	}
 	fillTicketStats(tickets)
-	unreadFlags := ticketUnreadFlags(ticketIdList(tickets), TicketSenderRoleUser)
+	unreadFlags := ticketUnreadFlags(ticketIdList(tickets), TicketSenderRoleAdmin)
 	for _, t := range tickets {
-		t.Unread = unreadFlags[t.Id] && t.LastMessageAt > t.AdminLastReadAt
+		t.Unread = unreadFlags[t.Id]
 	}
 	return tickets, total, nil
 }

@@ -39,6 +39,7 @@ import { Dialog } from '@/components/dialog'
 
 import { createTicket, getUserTickets } from './api'
 import { TicketEditor } from './components/ticket-editor'
+import { TicketReadBadge } from './components/ticket-read-badge'
 import type { Ticket } from './types'
 
 function TicketStatusBadge({ status }: { status: string }) {
@@ -152,15 +153,13 @@ export function Tickets() {
                   <Card className='hover:bg-muted/50 cursor-pointer transition-colors'>
                     <CardHeader className='pb-3'>
                       <div className='flex items-start justify-between gap-2'>
-                        <div className='flex min-w-0 items-center gap-2'>
-                          {ticket.unread && (
-                            <span className='bg-destructive h-2 w-2 shrink-0 rounded-full' />
-                          )}
-                          <CardTitle className='truncate text-base'>
-                            {ticket.title}
-                          </CardTitle>
+                        <CardTitle className='min-w-0 truncate text-base'>
+                          {ticket.title}
+                        </CardTitle>
+                        <div className='flex shrink-0 items-center gap-2'>
+                          <TicketReadBadge unread={ticket.unread} />
+                          <TicketStatusBadge status={ticket.status} />
                         </div>
-                        <TicketStatusBadge status={ticket.status} />
                       </div>
                       <CardDescription>
                         #{ticket.id} · {ticket.message_count} {t('messages')}{' '}

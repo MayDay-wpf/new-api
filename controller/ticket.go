@@ -102,8 +102,10 @@ func GetTicketDetail(c *gin.Context) {
 		return
 	}
 
+	// 自己的工单按"用户"身份记已读（管理员看自己提的工单也一样）；
+	// 管理员经用户路由查看他人工单时才记为 admin 已读。
 	readRole := model.TicketSenderRoleUser
-	if role >= common.RoleAdminUser {
+	if ticket.UserId != userId {
 		readRole = model.TicketSenderRoleAdmin
 	}
 	_ = model.MarkTicketRead(id, readRole)

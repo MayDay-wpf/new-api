@@ -70,6 +70,7 @@ import { useInvalidateTicketUnread } from './hooks/use-ticket-badge'
 import { useStickToBottom } from './hooks/use-stick-to-bottom'
 import { TicketEditor } from './components/ticket-editor'
 import { TicketMessageBubble } from './components/ticket-message-bubble'
+import { TicketReadBadge } from './components/ticket-read-badge'
 import type { Ticket, TicketMessage } from './types'
 
 // ---------------------------------------------------------------------------
@@ -184,23 +185,21 @@ export function AdminTickets() {
                 <Card className='hover:bg-muted/50 cursor-pointer transition-colors'>
                   <CardHeader className='pb-3'>
                     <div className='flex items-start justify-between gap-2'>
-                      <div className='flex min-w-0 items-center gap-2'>
-                        {ticket.unread && (
-                          <span className='bg-destructive h-2 w-2 shrink-0 rounded-full' />
-                        )}
-                        <CardTitle className='truncate text-base'>
-                          {ticket.title}
-                        </CardTitle>
+                      <CardTitle className='min-w-0 truncate text-base'>
+                        {ticket.title}
+                      </CardTitle>
+                      <div className='flex shrink-0 items-center gap-2'>
+                        <TicketReadBadge unread={ticket.unread} />
+                        <Badge
+                          variant={
+                            ticket.status === 'open' ? 'default' : 'secondary'
+                          }
+                        >
+                          {ticket.status === 'open'
+                            ? t('Open')
+                            : t('Closed')}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={
-                          ticket.status === 'open' ? 'default' : 'secondary'
-                        }
-                      >
-                        {ticket.status === 'open'
-                          ? t('Open')
-                          : t('Closed')}
-                      </Badge>
                     </div>
                     <CardDescription className='mt-1'>
                       #{ticket.id} ·{' '}
